@@ -1,0 +1,22 @@
+{
+  "name": "smartdisk-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "playwright": "^1.64.1",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.7",
+    "vue-tsc": "^2.1.10"
+  }
+}

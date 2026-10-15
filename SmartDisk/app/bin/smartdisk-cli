@@ -1,0 +1,29 @@
+#!/bin/bash
+# SmartDisk command-line interface: print disk/SMART info as JSON.
+# Thin wrapper around the main binary's `cli` subcommand.
+
+# Resolve the app target dir. When invoked via the /usr/local/bin symlink the
+# script's own dirname is wrong, so resolve the symlink to the real location.
+if [ -n "${TRIM_APPDEST}" ]; then
+    APP_DIR="${TRIM_APPDEST}"
+else
+    SRC="$0"
+    while [ -L "$SRC" ]; do
+        DIR="$(cd "$(dirname "$SRC")" && pwd)"
+        SRC="$(readlink "$SRC")"
+        # readlink may return a relative path; resolve it against the link's dir.
+        case "$SRC" in
+            /*) : ;;                      # absolute
+            *)  SRC="$DIR/$SRC" ;;        # relative -> make absolute
+        esac
+    done
+    # SRC now points at .../bin/smartdisk-cli inside the app target dir.
+    APP_DIR="$(cd "$(dirname "$SRC")/.." && pwd)"
+fi
+
+BIN="${APP_DIR}/server/smartdisk"
+if [ ! -x "$BIN" ]; then
+    echo "smartdisk binary not found at $BIN" >&2
+    exit 1
+fi
+exec "$BIN" cli "$@"

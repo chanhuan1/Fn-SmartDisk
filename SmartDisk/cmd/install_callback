@@ -1,0 +1,14 @@
+#!/bin/bash
+# Called after install. Verify the bundled binary exists and is executable,
+# and ensure bundled smartctl/nvme (if present) are executable.
+
+BIN="${TRIM_APPDEST}/server/smartdisk"
+
+if [ ! -f "${BIN}" ]; then
+    echo "SmartDisk binary missing after install." > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    exit 1
+fi
+chmod +x "${BIN}" 2>/dev/null || true
+chmod +x "${TRIM_APPDEST}"/bin/* 2>/dev/null || true
+
+exit 0

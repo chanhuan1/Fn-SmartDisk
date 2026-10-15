@@ -1,0 +1,55 @@
+{
+  "device": {"name": "/dev/sda", "info_name": "/dev/sda", "type": "scsi", "protocol": "SCSI"},
+  "model_name": "WDC WD40EFRX-68N32N0",
+  "serial_number": "WD-WCC7K3ABCDEF",
+  "firmware_version": "82.00A82",
+  "wwn": {"naa": 5, "oui": 4108, "id": 123456789012},
+  "write_cache": {"enabled": true, "size": 268435456, "reordering": true},
+  "ncq_depth": 32,
+  "apm_level": 128,
+  "user_capacity": {"blocks": 7814037168, "bytes": 4000787030016},
+  "rotation_rate": 5400,
+  "logical_block_size": 512,
+  "physical_block_size": 4096,
+  "form_factor": {"ata_version_string": "ACS-3", "name": "3.5 inches"},
+  "trim": {"supported": false},
+  "interface_speed": {
+    "max": {"sata_value": 14, "string": "6.0 Gb/s", "units": "Gb/s"},
+    "current": {"sata_value": 14, "string": "6.0 Gb/s", "units": "Gb/s"}
+  },
+  "smart_support": {"available": true, "enabled": true},
+  "smart_status": {"passed": true},
+  "temperature": {"current": 38},
+  "scttemp": {"current": 38, "max": 52, "min": 21, "limit_max": 60, "limit_min": 5, "over_limit_count": 0, "under_limit_count": 0},
+  "ata_sata_phy_event_counters": {"table": [
+    {"id": 1, "name": "ICRC", "value": 0},
+    {"id": 2, "name": "R_ERR", "value": 3}
+  ]},
+  "power_on_time": {"hours": 21340},
+  "power_cycle_count": 640,
+  "ata_smart_self_test_log": {"table": [
+    {"type": {"value": 1, "string": "Short offline"}, "status": {"value": 0, "string": "Completed without error", "passed": true}, "lifetime_hours": 18200},
+    {"type": {"value": 2, "string": "Extended offline"}, "status": {"value": 0, "string": "Completed without error", "passed": true}, "lifetime_hours": 15100},
+    {"type": {"value": 1, "string": "Short offline"}, "status": {"value": 4, "string": "Aborted by host", "passed": false}, "lifetime_hours": 12400}
+  ]},
+  "ata_smart_error_log": {"table": []},
+  "ata_device_statistics": {"pages": [
+    {"number": 1, "name": "General Statistics", "table": [
+      {"offset": 8, "name": "Lifetime Power-On Resets", "value": 640, "flags": 0},
+      {"offset": 16, "name": "Power-on Hours", "value": 21340, "flags": 0}
+    ]},
+    {"number": 4, "name": "General Errors Statistics", "table": [
+      {"offset": 8, "name": "Number of Reported Uncorrectable Errors", "value": 0, "flags": 0}
+    ]}
+  ]},
+  "ata_smart_attributes": {"table": [
+    {"id": 1, "name": "Raw_Read_Error_Rate", "value": 200, "worst": 200, "thresh": 51, "when_failed": "", "raw": {"value": 0, "string": "0"}},
+    {"id": 5, "name": "Reallocated_Sector_Ct", "value": 200, "worst": 200, "thresh": 140, "when_failed": "", "raw": {"value": 0, "string": "0"}},
+    {"id": 9, "name": "Power_On_Hours", "value": 71, "worst": 71, "thresh": 0, "when_failed": "", "raw": {"value": 21340, "string": "21340"}},
+    {"id": 12, "name": "Power_Cycle_Count", "value": 100, "worst": 100, "thresh": 0, "when_failed": "", "raw": {"value": 640, "string": "640"}},
+    {"id": 193, "name": "Load_Cycle_Count", "value": 98, "worst": 98, "thresh": 0, "when_failed": "", "raw": {"value": 1832, "string": "1832"}},
+    {"id": 194, "name": "Temperature_Celsius", "value": 109, "worst": 95, "thresh": 0, "when_failed": "", "raw": {"value": 38, "string": "38"}},
+    {"id": 197, "name": "Current_Pending_Sector", "value": 200, "worst": 200, "thresh": 0, "when_failed": "", "raw": {"value": 0, "string": "0"}},
+    {"id": 199, "name": "UDMA_CRC_Error_Count", "value": 200, "worst": 200, "thresh": 0, "when_failed": "", "raw": {"value": 0, "string": "0"}}
+  ]}
+}

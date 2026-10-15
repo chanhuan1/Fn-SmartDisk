@@ -1,0 +1,2 @@
+Bus 002 Device 004: ID 174c:55aa ASMedia Technology Inc. ASM1153/ASM235 USB3.0 to SATA bridge
+Bus 001 Device 002: ID 1d6b:0003 Linux Foundation 3.0 root hub

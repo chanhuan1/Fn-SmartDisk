@@ -1,0 +1,28 @@
+{
+  "device": {"name": "/dev/nvme0n1", "info_name": "/dev/nvme0n1", "type": "nvme", "protocol": "NVMe"},
+  "model_name": "Samsung SSD 980 PRO 2TB",
+  "serial_number": "S69ENF0R987654B",
+  "firmware_version": "5B2QGXA7",
+  "nvme_total_capacity": {"bytes": 2000398934016},
+  "smart_support": {"available": true, "enabled": true},
+  "smart_status": {"passed": true},
+  "nvme_smart_health_information_log": {
+    "critical_warning": 0,
+    "temperature": 45,
+    "available_spare": 100,
+    "available_spare_threshold": 10,
+    "percentage_used": 7,
+    "data_units_read": 52428800,
+    "data_units_written": 83886080,
+    "host_read_commands": 1234567890,
+    "host_write_commands": 2345678901,
+    "controller_busy_time": 4567,
+    "power_on_hours": 5120,
+    "power_cycles": 305,
+    "unsafe_shutdowns": 12,
+    "media_errors": 0,
+    "num_err_log_entries": 3,
+    "warning_temp_time": 0,
+    "critical_temp_time": 0
+  }
+}

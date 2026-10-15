@@ -1,0 +1,5 @@
+[/dev/mapper/trim_vol-0].write_io_errs    0
+[/dev/mapper/trim_vol-0].read_io_errs     0
+[/dev/mapper/trim_vol-0].flush_io_errs    0
+[/dev/mapper/trim_vol-0].corruption_errs  2
+[/dev/mapper/trim_vol-0].generation_errs  0

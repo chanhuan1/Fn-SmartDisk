@@ -1,0 +1,25 @@
+# dependencies
+web/node_modules/
+
+# build outputs
+web/tsconfig.tsbuildinfo
+server/web/dist/
+SmartDisk/app/www/
+SmartDisk/app/server/smartdisk
+*.fpk
+
+# os junk
+.DS_Store
+
+# local toolchains & caches (never commit)
+tools/go/
+tools/fnpack*
+tools/.gocache/
+tools/.gomodcache/
+
+# editor / logs
+*.log
+Thumbs.db
+
+# local toolchains
+tools/bin/

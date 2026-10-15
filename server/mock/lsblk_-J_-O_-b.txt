@@ -1,0 +1,25 @@
+{"blockdevices":[
+  {"name":"sda","path":"/dev/sda","type":"disk","tran":"sata","size":"4000787030016","model":"WDC WD40EFRX-68N32N0","serial":"WD-WCC7K3ABCDEF","vendor":"ATA","rota":true,"rm":false,
+    "children":[
+      {"name":"sda1","path":"/dev/sda1","type":"part","size":"4000785989632","fstype":"linux_raid_member","label":"NAS:一号盘","pkname":"sda",
+        "children":[
+          {"name":"md125","path":"/dev/md125","type":"raid1","size":"4000785989632","fstype":"LVM2_member","pkname":"sda1",
+            "children":[
+              {"name":"trim_vol-0","path":"/dev/mapper/trim_vol-0","type":"lvm","size":"4000785989632","fstype":"btrfs","mountpoint":"/vol2","mountpoints":["/vol2"],"fsused":"2900000000000","fssize":"4000785989632","fsuse%":"72%","pkname":"md125"}
+            ]}
+        ]}
+    ]},
+  {"name":"sdb","path":"/dev/sdb","type":"disk","tran":"sata","size":"1000204886016","model":"Samsung SSD 870 EVO 1TB","serial":"S5Y2NJ0R123456A","vendor":"ATA","rota":false,"rm":false,
+    "children":[
+      {"name":"sdb1","path":"/dev/sdb1","type":"part","size":"1000203091968","fstype":"ext4","mountpoint":"/","mountpoints":["/"],"fsused":"420000000000","fssize":"1000203091968","fsuse%":"41%","pkname":"sdb"}
+    ]},
+  {"name":"nvme0n1","path":"/dev/nvme0n1","type":"disk","tran":"nvme","size":"2000398934016","model":"Samsung SSD 980 PRO 2TB","serial":"S69ENF0R987654B","vendor":"","rota":false,"rm":false,
+    "children":[
+      {"name":"nvme0n1p1","path":"/dev/nvme0n1p1","type":"part","size":"2000396746752","fsused":"1500000000000","fssize":"2000396746752","fsuse%":"74%"}
+    ]},
+  {"name":"sdc","path":"/dev/sdc","type":"disk","tran":"usb","size":"2000398934016","model":"ST2000DM008-2FR102","serial":"ZFL0ABCDE","vendor":"Seagate","rota":true,"rm":true,
+    "children":[
+      {"name":"sdc1","path":"/dev/sdc1","type":"part","size":"2000396746752","fsused":"300000000000","fssize":"2000396746752","fsuse%":"14%"}
+    ]},
+  {"name":"loop0","path":"/dev/loop0","type":"loop","tran":"","size":"0","model":"","serial":"","vendor":"","rota":false,"rm":false}
+]}

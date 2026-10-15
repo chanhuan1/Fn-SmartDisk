@@ -1,0 +1,114 @@
+#!/bin/bash
+# SmartDisk lifecycle: start / stop / status.
+# Runs the single Go binary in "all" mode (collector + web panel). Reading
+# SMART needs raw device access, so this app runs privileged by design; the
+# binary itself only issues read-only smartctl/nvme queries.
+
+APP_BIN="${TRIM_APPDEST}/server/smartdisk"
+LOG_FILE="${TRIM_PKGVAR}/smartdisk.log"
+PID_FILE="${TRIM_PKGVAR}/smartdisk.pid"
+PORT="${TRIM_SERVICE_PORT:-8315}"
+
+export SMARTDISK_MODE="all"
+export SMARTDISK_PORT="${PORT}"
+export SMARTDISK_WEB_ROOT="${TRIM_APPDEST}/www"
+# Serve through the fnOS unified gateway: the desktop iframe loads
+# /app/smartdisk, which fnOS forwards to ${TRIM_APPDEST}/app.sock.
+export SMARTDISK_GATEWAY="1"
+export SMARTDISK_GATEWAY_SOCKET="${TRIM_APPDEST}/app.sock"
+export SMARTDISK_GATEWAY_PREFIX="/app/SmartDisk"
+# Runtime state (hibernate.json, power-events.json) must survive app and
+# system restarts; TRIM_PKGVAR is fnOS's per-app persistent var dir.
+export SMARTDISK_DATA_DIR="${TRIM_PKGVAR}"
+# Bundled tools take precedence; config.Load also falls back to system paths.
+if [ -x "${TRIM_APPDEST}/bin/smartctl" ]; then
+    export SMARTDISK_SMARTCTL="${TRIM_APPDEST}/bin/smartctl"
+fi
+if [ -x "${TRIM_APPDEST}/bin/nvme" ]; then
+    export SMARTDISK_NVME="${TRIM_APPDEST}/bin/nvme"
+fi
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
+}
+
+check_process() {
+    local pid=$1
+    kill -0 "${pid}" 2>/dev/null
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if [ -n "${pid}" ] && check_process "${pid}"; then
+            return 0
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 1
+}
+
+start_process() {
+    if status; then
+        log_msg "already running"
+        return 0
+    fi
+    if [ ! -x "${APP_BIN}" ]; then
+        echo "SmartDisk binary not found at ${APP_BIN}" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+        log_msg "ERROR: binary not found at ${APP_BIN}"
+        return 1
+    fi
+    log_msg "starting smartdisk (port ${PORT})"
+    "${APP_BIN}" >> "${LOG_FILE}" 2>&1 &
+    printf "%s" "$!" > "${PID_FILE}"
+    sleep 1
+    if ! status; then
+        echo "SmartDisk failed to start; see ${LOG_FILE}" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+        log_msg "ERROR: process exited at startup"
+        return 1
+    fi
+    log_msg "started pid $(cat "${PID_FILE}")"
+    return 0
+}
+
+stop_process() {
+    log_msg "stopping smartdisk"
+    if [ -r "${PID_FILE}" ]; then
+        local pid
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if [ -n "${pid}" ] && check_process "${pid}"; then
+            kill -TERM "${pid}" 2>/dev/null
+            local count=0
+            while check_process "${pid}" && [ ${count} -lt 10 ]; do
+                sleep 1
+                count=$((count + 1))
+            done
+            if check_process "${pid}"; then
+                kill -KILL "${pid}" 2>/dev/null
+                sleep 1
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 0
+}
+
+case "$1" in
+start)
+    start_process
+    ;;
+stop)
+    stop_process
+    ;;
+status)
+    if status; then
+        exit 0
+    else
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac
