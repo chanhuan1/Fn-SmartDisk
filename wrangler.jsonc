@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fn-smartdisk",
+  "compatibility_date": "2026-10-12",
+  "observability": {
+    "enabled": false
+  },
+  "assets": {
+    "directory": "site"
+  }
+}
