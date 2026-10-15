@@ -2,6 +2,8 @@
 
 > 飞牛 fnOS 原生 `.fpk` 应用 —— 让每一块硬盘都被真正看见。
 
+📖 **[在线介绍页](https://fn-smartdisk.pages.dev)** —— 完整功能说明、安装指南、注意事项，一页看懂。
+
 **Fn-SmartDisk** 深度扩展 fnOS 官方磁盘面板：把散落在 `smartctl`、`lsblk`、`btrfs` 里的原始数据翻译成一份专业、可读、可操作的硬盘健康档案，并为冷备盘提供内核级深度下线与唤醒能力。
 
 ![License](https://img.shields.io/badge/license-MIT-green) ![Platform](https://img.shields.io/badge/platform-fnOS%20x86__64-blue) ![Tech](https://img.shields.io/badge/stack-Go%20%2B%20Vue3-orange)
