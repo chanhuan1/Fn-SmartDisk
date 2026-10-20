@@ -1,7 +1,7 @@
 # 磁盘高级管理 交接文档
 
 > 飞牛 fnOS 磁盘高级管理 · 交接给下一位开发者 / 维护者
-> 版本 v3.1.0（电源确认安全修复、死代码清理与本地重新打包）
+> 版本 v1.0.0（首个发布版本）
 
 > 仓库：<https://github.com/chanhuan1/Fn-SmartDisk> · 在线介绍页：<https://fn-smartdisk.pages.dev>
 
@@ -45,7 +45,7 @@
 
 | 项 | 状态 |
 |----|------|
-| 安装包 | `SmartDisk/SmartDisk.fpk`（约 3.2 MB，x86-64，版本 3.1.0），可手动安装 |
+| 安装包 | `SmartDisk/SmartDisk.fpk`（约 3.2 MB，x86-64，版本 1.0.0），可手动安装 |
 | 统一网关 | **已接入**（iframe 桌面窗口走 `/app/SmartDisk` → Unix Socket） |
 | 电源控制 | **已实现**（深度下线/唤醒 + 确认弹窗 + 阵列/系统盘保护 + SSE 实时步骤日志 + 操作日志面板），UI 截图验证通过 |
 | 单元/集成测试 | 全部通过（`smart`、`collector` 含 mock 端到端） |
@@ -56,19 +56,11 @@
 
 **环境提醒（重要）：** 开发机 macOS 27 (Tahoe) 与 Go 1.22 有链接兼容 bug（引入 `net` 包时生成损坏二进制，缺 `LC_UUID`）。**必须用 Go 1.24+**。本机曾用 `/private/tmp/gosdk124`（1.24.9），属临时目录，重启会被清理，请自备 Go 1.24+ 并设 `GO` 环境变量。
 
-### 3.1.0 变更（电源确认安全修复）
+### 1.0.0 变更（首个发布版本）
 
-深度下线请求新增独立的 `confirmBusyIO` 字段，与 `confirmRaid` 分离。只确认 RAID 降级风险时，若磁盘正在读写仍会返回 409，必须再次勾选“我确认数据风险，仍要强制下线”才会继续。该语义贯通本地模式、分离 IPC、HTTP/SSE 与前端确认弹窗，并新增回归测试覆盖。
+面向用户的应用名称为「磁盘高级管理」，安装包版本为 `1.0.0`。内部 `appname`、`desktop_applaunchname` 和 `/app/SmartDisk` 网关路径保持原值。
 
-同时清理未使用的前端/后端导出和本地杂项，`HANDOFF.md` 同步修正 `TRIM_PKGVAR` 持久化路径。
-
-### 3.0.0 名称与版本
-
-面向用户的应用名称统一为「磁盘高级管理」，安装包版本为 `3.0.0`。内部 `appname`、`desktop_applaunchname` 和 `/app/SmartDisk` 网关路径保持原值，升级时保留 fnOS 应用身份、数据目录和网关注册。
-
-### 2.1 v2.1.0 变更（界面体验全面优化）
-
-纯前端/交互优化，无后端数据模型与权限变更，向后兼容 v2.0。
+版本内容整合了此前开发过程中的全部能力：全介质磁盘健康检测、SSD 剩余寿命与主控识别、完整中文 SMART、链路与 btrfs 错误、电源控制（深度下线/唤醒 + 独立的 `confirmRaid` 与 `confirmBusyIO` 确认语义）、界面体验优化、休眠盘安全采集与磁盘备注。该语义贯通本地模式、分离 IPC、HTTP/SSE 与前端确认弹窗，并有回归测试覆盖。
 
 **新增组件**（`web/src/components/`）：`DiskTypeIcon.vue`（盘类型图标）、`PowerBadge.vue`（运行/休眠/已下线徽标 + 脉冲点）、`SkeletonCards.vue`（加载骨架屏，kind: overview/detail/power）、`CapacityDonut.vue`（容量环形图）、`TempRangeBar.vue`（温度区间条）。删除死代码 `TopologyTree.vue`。
 
@@ -80,8 +72,7 @@
 
 **修复**：NVMe 盘「接口 NVMe + 类型 NVMe」标签重复——`Overview.vue` 的 `mediaTag()` 在接口为 NVMe 时把介质标签统一显示为 SSD；`icons.ts` 函数式图标 prop 对象解包（修复 `{size}` 未取值的图标渲染异常）。
 
-### 3.0.0 变更（名称更新与安全采集优化）
-
+安全采集优化（已并入 v1.0.0）：
 - 冷缓存采集先用 `smartctl -n standby` 探测旋转盘；休眠或无法确认状态的盘设为 `smartDeferred`，不会执行完整 SMART 读取。
 - 概览和详情提供逐盘确认读取；跳过后保留基础信息，`smartdisk-cli scan` 是显式全盘采集入口。
 - collector 以隔离快照发布缓存，读请求不等待磁盘扫描；逐盘采集最多并发 2 块。电源操作状态更新不会被并发刷新覆盖。
@@ -229,7 +220,7 @@
 - **懒卸载（`umount -l`）**：fnOS 的 `trim_file_monit` 对每个卷都保持只读目录句柄，严格 `umount` 必返回 EBUSY。先 `sync` 刷盘后用懒卸载摘掉挂载点，内核在句柄释放后完成清理——这是社区冷备方案的通行做法，对只读监控句柄无数据风险。
 - **电源操作串行化**（`wakeMu`）：Sleep/Offline/Wake 全局互斥，防并发把状态机打乱。
 - **降级阵列告警**：唤醒 RAID 成员盘后若阵列未重组（`VolumePaths` 为空），结果与日志明确标注「阵列未重组，存储空间暂不可用」，不伪装成功。
-- **降级阵列告警（v2.0 修正）**：只有「下线时原本有挂载卷、唤醒后卷没回来」才提示「存储空间暂未回挂，请检查」；**下线时本来就没卷的盘**（如无卷冷备盘）唤醒后没卷是正常的，不误报失败。
+- **降级阵列告警**：只有「下线时原本有挂载卷、唤醒后卷没回来」才提示「存储空间暂未回挂，请检查」；**下线时本来就没卷的盘**（如无卷冷备盘）唤醒后没卷是正常的，不误报失败。
 - **读写活动检测 + 二次确认**：下线前读两次 `/proc/diskstats`（`diskIOActive`，间隔 300ms），若该盘读+写扇区计数在涨，返回 `ErrDiskBusy`(409) 拒绝下线；前端弹「正在读写，强制下线可能丢数据」强确认框，勾选后才放行。探测失败时安全降级为不拦。
 - **补挂载失败保留下线标记**：唤醒时若有挂载点恢复失败，磁盘在面板仍显示「已下线」可重试唤醒，不会静默从列表消失。
 - **唤醒重扫顺序**：`running` → 等待设备节点出现 → `rescan`（先等设备是阵列成员，再重扫读分区表，利于内核重组阵列）。
@@ -481,8 +472,8 @@ iframe 网关已修通，但**解析器面对的是千差万别的真实盘**，
 | 深度下线报「阵列降级」409 | 该盘是 md 成员，前端需勾选风险确认后带 `confirmRaid:true` 重试 |
 | 唤醒超时 | 盘体起旋失败或 USB 桥接不响应；SSH 手动 `echo running > /sys/block/sdX/device/state` + `rescan` 排查 |
 | 操作日志为空 | 日志在本版才引入，旧版本操作无记录；文件在 `@appdata/SmartDisk/power-events.json`，可直接查看 |
-| 下线后「唤醒」按钮没了 / 记录丢失 | 旧版把 `hibernate.json` 写到了临时目录（`TRIM_APPDATA` 缺失时 fallback `os.TempDir()`），重启应用即丢。v2.0 起 `cmd/main` 显式设 `SMARTDISK_DATA_DIR=${TRIM_PKGVAR}`（持久化）。**手动救回 offline 盘**：`echo running > /sys/block/sdX/device/state` → `sleep 8` → `echo 1 > /sys/block/sdX/device/rescan`，再用 `lsblk` 确认回来 |
-| 重启后唤醒找不到盘 | 飞牛重启会给盘重新分配盘符（sda↔sdb…）。v2.0 起下线记录以**序列号**为 key（无序列号回退 WWN），唤醒按序列号解析当前盘符；sysfs 操作用下线时记录的盘符（offline 期间盘符不变） |
+| 下线后「唤醒」按钮没了 / 记录丢失 | `cmd/main` 显式设 `SMARTDISK_DATA_DIR=${TRIM_PKGVAR}`（持久化）。**手动救回 offline 盘**：`echo running > /sys/block/sdX/device/state` → `sleep 8` → `echo 1 > /sys/block/sdX/device/rescan`，再用 `lsblk` 确认回来 |
+| 重启后唤醒找不到盘 | 飞牛重启会给盘重新分配盘符（sda↔sdb…）。下线记录以**序列号**为 key（无序列号回退 WWN），唤醒按序列号解析当前盘符；sysfs 操作用下线时记录的盘符（offline 期间盘符不变） |
 
 ---
 
