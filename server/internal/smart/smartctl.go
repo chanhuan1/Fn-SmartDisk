@@ -5,6 +5,7 @@ package smart
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -35,13 +36,8 @@ type smartctlJSON struct {
 	} `json:"eui64"`
 	NGUID string `json:"nguid"`
 	// Drive write cache / NCQ (from smartctl -i JSON where available).
-	ReadCacheLookahead *struct {
-		Enabled bool `json:"enabled"`
-	} `json:"read_cache_lookahead"`
 	WriteCache *struct {
-		Enabled    bool  `json:"enabled"`
-		Size       int64 `json:"size"`
-		Reordering bool  `json:"reordering"`
+		Size int64 `json:"size"`
 	} `json:"write_cache"`
 	NCQDepth     int `json:"ncq_depth"`
 	APMLevel     int `json:"apm_level"`
@@ -107,22 +103,17 @@ type smartctlJSON struct {
 	LogicalBlockSize  int `json:"logical_block_size"`
 	PhysicalBlockSize int `json:"physical_block_size"`
 	FormFactor        *struct {
-		ATAVersion string `json:"ata_version_string"`
-		Name       string `json:"name"`
+		Name string `json:"name"`
 	} `json:"form_factor"`
 	Trim struct {
 		Supported bool `json:"supported"`
 	} `json:"trim"`
 	InterfaceSpeed *struct {
 		Max struct {
-			SataValue int    `json:"sata_value"`
-			String    string `json:"string"`
-			Units     string `json:"units"`
+			String string `json:"string"`
 		} `json:"max"`
 		Current struct {
-			SataValue int    `json:"sata_value"`
-			String    string `json:"string"`
-			Units     string `json:"units"`
+			String string `json:"string"`
 		} `json:"current"`
 	} `json:"interface_speed"`
 
@@ -152,13 +143,11 @@ type smartctlJSON struct {
 
 	DeviceStatistics *struct {
 		Pages []struct {
-			Number int    `json:"number"`
-			Name   string `json:"name"`
-			Table  []struct {
-				Offset int    `json:"offset"`
-				Name   string `json:"name"`
-				Value  int64  `json:"value"`
-				Flags  int    `json:"flags"`
+			Name  string `json:"name"`
+			Table []struct {
+				Name  string `json:"name"`
+				Value int64  `json:"value"`
+				Flags int    `json:"flags"`
 			} `json:"table"`
 		} `json:"pages"`
 	} `json:"ata_device_statistics"`
@@ -168,8 +157,6 @@ type smartctlJSON struct {
 		Current         int   `json:"current"`
 		Max             int   `json:"max"`
 		Min             int   `json:"min"`
-		LimitMax        int   `json:"limit_max"`
-		LimitMin        int   `json:"limit_min"`
 		OverLimitCount  int64 `json:"over_limit_count"`
 		UnderLimitCount int64 `json:"under_limit_count"`
 	} `json:"scttemp"`
@@ -275,7 +262,7 @@ func ParseSmartctl(data []byte, d *model.Disk) error {
 				RawValue:   a.Raw.Value,
 			})
 		}
-		d.PercentUsed, d.PercentLifeRemain, d.TotalBytesWritten = deriveATALife(d.Attrs, vendorOf(d.Model))
+		d.PercentUsed, d.PercentLifeRemain, d.TotalBytesWritten, d.WriteSource = deriveATALife(d.Attrs, vendorOf(d.Model))
 		// Vendor-aware life estimate. deriveVendorLife intentionally overrides
 		// the generic deriveATALife result with the more authoritative
 		// vendor-specific source (attr231/169/Samsung-TBW) when available, and
@@ -304,6 +291,7 @@ func ParseSmartctl(data []byte, d *model.Disk) error {
 		// NVMe data_units_written is in units of 1000 * 512 bytes.
 		if nv.DataUnitsWritten > 0 {
 			d.TotalBytesWritten = nv.DataUnitsWritten * 1000 * 512
+			d.WriteSource = "NVMe data_units_written × 512000 字节"
 		}
 		// Expose the full health log for the NVMe SMART table.
 		d.NVMe = &model.NVMeHealth{
@@ -391,9 +379,8 @@ func ParseSmartctl(data []byte, d *model.Disk) error {
 		cur := sp.Current.String
 		max := sp.Max.String
 		down := false
-		// Compare the parsed Gb/s from the display strings, not the SataValue
-		// enum (its mapping to actual speed varies and can disagree with the
-		// string, e.g. both strings "6.0 Gb/s" while enums differ).
+		// Compare the parsed Gb/s from the display strings; SMART enum values
+		// are not needed and can disagree with the human-readable rate.
 		curG, maxG := parseGbps(cur), parseGbps(max)
 		if curG > 0 && maxG > 0 && curG < maxG {
 			down = true
@@ -513,7 +500,7 @@ func writeUnitBytes(vendor VendorKind, id int) int64 {
 
 // deriveATALife extracts SSD life / wear metrics from vendor ATA attributes.
 // Attribute IDs and write units vary by vendor; we check the common ones.
-func deriveATALife(attrs []model.SmartAttr, vendor VendorKind) (percentUsed, lifeRemain int, bytesWritten int64) {
+func deriveATALife(attrs []model.SmartAttr, vendor VendorKind) (percentUsed, lifeRemain int, bytesWritten int64, writeSource string) {
 	percentUsed, lifeRemain = -1, -1
 	for _, a := range attrs {
 		name := strings.ToLower(a.Name)
@@ -534,11 +521,13 @@ func deriveATALife(attrs []model.SmartAttr, vendor VendorKind) (percentUsed, lif
 			}
 		case 241: // Total_LBAs_Written
 			bytesWritten = a.RawValue * writeUnitBytes(vendor, a.ID)
+			writeSource = writeUnitDescription(vendor, a.ID)
 		case 242: // Total_LBAs_Read (ignored for write life)
 		}
 		if strings.Contains(name, "total_lbas_written") || strings.Contains(name, "lifetime_writes") {
 			if bytesWritten == 0 {
 				bytesWritten = a.RawValue * writeUnitBytes(vendor, a.ID)
+				writeSource = writeUnitDescription(vendor, a.ID)
 			}
 		}
 		if strings.Contains(name, "percent_life_remaining") || strings.Contains(name, "ssd_life_left") {
@@ -556,4 +545,18 @@ func deriveATALife(attrs []model.SmartAttr, vendor VendorKind) (percentUsed, lif
 		percentUsed = clamp100(100 - lifeRemain)
 	}
 	return
+}
+
+func writeUnitDescription(vendor VendorKind, id int) string {
+	switch vendor {
+	case VendorPhison:
+		if id == 241 {
+			return fmt.Sprintf("SMART attr%d × 1 GiB（Phison）", id)
+		}
+	case VendorSMI:
+		if id == 241 || id == 245 || id == 246 {
+			return fmt.Sprintf("SMART attr%d × 32 MiB（SMI）", id)
+		}
+	}
+	return fmt.Sprintf("SMART attr%d × 512 字节（LBA）", id)
 }

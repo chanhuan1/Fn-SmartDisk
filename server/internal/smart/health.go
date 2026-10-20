@@ -34,7 +34,11 @@ func Grade(d *model.Disk) {
 
 	if !d.SmartAvail {
 		d.Health = model.GradeUnknown
-		d.HealthNotes = []string{"无法读取 SMART 数据（可能为 USB 桥接不支持透传）"}
+		if d.SmartDeferred {
+			d.HealthNotes = []string{"为避免唤醒休眠磁盘，SMART 数据暂缓读取"}
+		} else {
+			d.HealthNotes = []string{"无法读取 SMART 数据（可能为 USB 桥接不支持透传）"}
+		}
 		return
 	}
 	if d.SmartSupported && !d.SmartOK {

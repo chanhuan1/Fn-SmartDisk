@@ -21,6 +21,11 @@ if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
   echo "!! version mismatch: manifest=$VERSION web/package.json=$PACKAGE_VERSION" >&2
   exit 1
 fi
+LOCK_VERSION="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WEB/package-lock.json" | head -n 1)"
+if [ "$LOCK_VERSION" != "$VERSION" ]; then
+  echo "!! version mismatch: manifest=$VERSION web/package-lock.json=$LOCK_VERSION" >&2
+  exit 1
+fi
 
 echo "==> [1/6] Check frontend types"
 (cd "$WEB" && npm run typecheck)
@@ -51,6 +56,7 @@ for tool in smartctl nvme; do
 done
 
 echo "==> [6/6] Package .fpk"
+(cd "$APP" && find . -name .DS_Store -type f -delete)
 (cd "$APP" && fnpack build)
 
 echo

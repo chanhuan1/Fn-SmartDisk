@@ -186,6 +186,10 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "use GET")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "time": time.Now().Unix(), "version": s.cfg.Version})
 }
 
@@ -212,6 +216,10 @@ func (s *Server) handleRefreshDisk(w http.ResponseWriter, r *http.Request, id st
 
 // handlePowerLog serves GET /api/power/log?limit=N (default 100, max 500).
 func (s *Server) handlePowerLog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "use GET")
+		return
+	}
 	limit := 100
 	if q := r.URL.Query().Get("limit"); q != "" {
 		if n, err := strconv.Atoi(q); err == nil && n > 0 {
@@ -256,6 +264,7 @@ func (s *Server) handleSetNote(w http.ResponseWriter, r *http.Request, id string
 		Note string `json:"note"`
 	}
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&body); err != nil && err.Error() != "EOF" {
 			writeErr(w, http.StatusBadRequest, "invalid JSON body")
@@ -346,6 +355,10 @@ func collectedAt(disks []model.Disk) int64 {
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "use GET")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 	tree, err := s.src.Topology(ctx)
@@ -387,6 +400,14 @@ func (s *Server) handleDiskByID(w http.ResponseWriter, r *http.Request) {
 		s.handlePowerAction(w, r, id, parts[1])
 		return
 	}
+	if len(parts) != 1 {
+		writeErr(w, http.StatusNotFound, "unknown disk sub-resource")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "use GET")
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
@@ -415,6 +436,7 @@ func (s *Server) handlePowerAction(w http.ResponseWriter, r *http.Request, id, a
 		ConfirmBusyIO bool `json:"confirmBusyIO"`
 	}
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<10)
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&body); err != nil && err.Error() != "EOF" {
 			writeErr(w, http.StatusBadRequest, "invalid JSON body")

@@ -173,8 +173,8 @@ func TestSleepUpdatesCachedPowerState(t *testing.T) {
 func TestSleepRejectsSystemDisk(t *testing.T) {
 	c, _ := newTestCollector(t, baseResp(sysHDDLsblk, "ACTIVE"))
 	_, err := c.Sleep(context.Background(), "sdb")
-	if !errors.Is(err, ErrNotHDD) {
-		t.Fatalf("want ErrNotHDD (system disk mapped to capability denial), got %v", err)
+	if !errors.Is(err, ErrSystemDisk) {
+		t.Fatalf("want ErrSystemDisk, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "系统盘") {
 		t.Fatalf("error should mention 系统盘: %v", err)

@@ -102,7 +102,7 @@ async function run() {
 </script>
 
 <template>
-  <div class="pc-mask" @click.self="emit('close')">
+  <div class="pc-mask" @click.self="!busy && emit('close')">
     <div class="pc-box" role="dialog" aria-modal="true">
       <div class="pc-head">
         <span class="pc-ico" :class="meta.cls">
@@ -110,7 +110,7 @@ async function run() {
           <IconWake v-else :size="18" />
         </span>
         <div class="pc-title">{{ meta.title }}</div>
-        <button class="pc-x" @click="emit('close')" aria-label="关闭">×</button>
+        <button class="pc-x" :disabled="busy" @click="emit('close')" aria-label="关闭">×</button>
       </div>
 
       <div class="pc-body">
@@ -211,6 +211,7 @@ async function run() {
 .pc-title { font-size: 15px; font-weight: 800; letter-spacing: .2px; }
 .pc-x { margin-left: auto; background: none; border: none; color: var(--ink-3); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
 .pc-x:hover { color: var(--ink); background: var(--panel-3); }
+.pc-x:disabled { opacity: .4; cursor: not-allowed; }
 .pc-body { padding: 16px; font-size: 13px; color: var(--ink-2); }
 .pc-body p { margin: 8px 0; }
 .pc-body code { font-family: var(--font-mono); background: var(--panel-3); padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--acc); }

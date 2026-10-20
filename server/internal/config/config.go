@@ -45,6 +45,8 @@ type Config struct {
 	// GatewaySocket is set.
 	GatewaySocket string
 	GatewayPrefix string
+	// GatewaySocketMode controls access to the unified-gateway Unix socket.
+	GatewaySocketMode os.FileMode
 
 	// WebRoot is the directory that contains the built frontend assets.
 	WebRoot string
@@ -79,6 +81,18 @@ func getenvInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+func getenvFileMode(key string, def os.FileMode) os.FileMode {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseUint(strings.TrimPrefix(v, "0o"), 8, 32)
+	if err != nil {
+		return def
+	}
+	return os.FileMode(n).Perm()
 }
 
 // firstExisting returns the first path that exists, else def.
@@ -163,17 +177,18 @@ func Load() Config {
 			filepath.Join(binDir, "nvme"), "/usr/sbin/nvme", "/usr/bin/nvme"))
 
 	return Config{
-		Mode:          mode,
-		HTTPAddr:      httpAddr,
-		Port:          port,
-		SocketPath:    sock,
-		GatewaySocket: gwSocket,
-		GatewayPrefix: gwPrefix,
-		WebRoot:       webRoot,
-		SmartctlPath:  smartctl,
-		NvmePath:      nvme,
-		LsblkPath:     getenv("SMARTDISK_LSBLK", "lsblk"),
-		LsusbPath:     getenv("SMARTDISK_LSUSB", "lsusb"),
+		Mode:              mode,
+		HTTPAddr:          httpAddr,
+		Port:              port,
+		SocketPath:        sock,
+		GatewaySocket:     gwSocket,
+		GatewayPrefix:     gwPrefix,
+		GatewaySocketMode: getenvFileMode("SMARTDISK_GATEWAY_SOCKET_MODE", 0o600),
+		WebRoot:           webRoot,
+		SmartctlPath:      smartctl,
+		NvmePath:          nvme,
+		LsblkPath:         getenv("SMARTDISK_LSBLK", "lsblk"),
+		LsusbPath:         getenv("SMARTDISK_LSUSB", "lsusb"),
 		HdparmPath: getenv("SMARTDISK_HDPARM",
 			firstExisting("hdparm", "/usr/sbin/hdparm", "/sbin/hdparm", "/usr/bin/hdparm")),
 		DataDir: dataDir,

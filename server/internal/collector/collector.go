@@ -3,6 +3,8 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -96,8 +98,8 @@ func (c *Collector) PowerEvents(limit int) []model.PowerEvent {
 }
 
 // ClearPowerEvents wipes the persisted power-control log.
-func (c *Collector) ClearPowerEvents() {
-	c.powerLog.clear()
+func (c *Collector) ClearPowerEvents() error {
+	return c.powerLog.clear()
 }
 
 // lsblkNode is one row of `lsblk -J -O`.
@@ -109,17 +111,14 @@ type lsblkNode struct {
 	Size        json.Number `json:"size"`
 	Model       string      `json:"model"`
 	Serial      string      `json:"serial"`
-	Vendor      string      `json:"vendor"`
 	Rota        *bool       `json:"rota"`
 	FsUsed      json.Number `json:"fsused"` // bytes used on this (partition) node
-	FsSize      json.Number `json:"fssize"` // fs size on this node
 	FsUsePct    string      `json:"fsuse%"` // e.g. "42%"
 	FsType      string      `json:"fstype"`
 	Label       string      `json:"label"`
 	UUID        string      `json:"uuid"`
 	MountPoint  string      `json:"mountpoint"`
 	MountPoints []string    `json:"mountpoints"`
-	PkName      string      `json:"pkname"`
 	Children    []lsblkNode `json:"children"`
 }
 
@@ -248,7 +247,9 @@ func (c *Collector) SetNote(ctx context.Context, id, note string) (*model.Disk, 
 	if d == nil {
 		return nil, nil
 	}
-	c.hibernate.setNote(d, note)
+	if err := c.hibernate.setNote(d, note); err != nil {
+		return nil, err
+	}
 	d.UserNote = note
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -383,7 +384,6 @@ func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 				} else {
 					c.fillSmart(ctx, &d, lsusb)
 				}
-				d.ManufactureDate = smart.InferManufactureDate(d.Model, d.Serial)
 				d.CollectedAt = now
 				disks[i] = d
 			}
@@ -492,6 +492,10 @@ func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 		return nil, err
 	}
 
+	if err := c.reconcilePendingOffline(ctx, disks, offlineStates); err != nil {
+		return nil, err
+	}
+
 	// Persist fresh recovery data (UUIDs, mount points) for every live disk,
 	// then merge in placeholders for disks that are deep-offlined (and thus
 	// invisible to lsblk) so the UI can still show + wake them.
@@ -506,8 +510,12 @@ func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 				disks[i].PowerState = "offline"
 				disks[i].Hibernated = true
 				// Persist a minimal recovery record so wake works next time.
-				c.hibernate.upsertFromDisk(&disks[i])
-				c.hibernate.markOffline(stableKey(&disks[i]), true)
+				if err := c.hibernate.upsertFromDisk(&disks[i]); err != nil {
+					return nil, fmt.Errorf("persist recovery data for %s: %w", disks[i].ID, err)
+				}
+				if err := c.hibernate.markOffline(stableKey(&disks[i]), true); err != nil {
+					return nil, fmt.Errorf("persist offline state for %s: %w", disks[i].ID, err)
+				}
 				if rec2 := c.hibernate.getByDisk(&disks[i]); rec2 != nil {
 					disks[i].OfflineAt = rec2.OfflineAt
 				}
@@ -526,8 +534,12 @@ func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 			if !offlineStates[i] {
 				// Reboot revived the drive: clear the stale offline flag so
 				// the panel shows it online (with a 深度下线 button again).
-				c.hibernate.markOffline(stableKey(&disks[i]), false)
-				c.hibernate.upsertFromDisk(&disks[i])
+				if err := c.hibernate.markOffline(stableKey(&disks[i]), false); err != nil {
+					return nil, fmt.Errorf("clear stale offline state for %s: %w", disks[i].ID, err)
+				}
+				if err := c.hibernate.upsertFromDisk(&disks[i]); err != nil {
+					return nil, fmt.Errorf("refresh recovery data for %s: %w", disks[i].ID, err)
+				}
 				computePowerCaps(&disks[i])
 				continue
 			}
@@ -538,8 +550,23 @@ func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 			computePowerCaps(&disks[i])
 			continue // don't refresh recovery data for an offlined disk
 		}
-		c.hibernate.upsertFromDisk(&disks[i])
+		persistErr := c.hibernate.upsertFromDisk(&disks[i])
+		if persistErr != nil {
+			log.Printf("[hibernate] persist recovery data for %s: %v", disks[i].ID, persistErr)
+		}
 		computePowerCaps(&disks[i])
+		if persistErr != nil {
+			disks[i].NoSleepReason = "恢复数据无法持久化，已禁用电源操作"
+			disks[i].NoOfflineReason = "恢复数据无法持久化，已禁用深度下线"
+			disks[i].CanSleep = false
+			disks[i].CanOffline = false
+		}
+		if rec := c.hibernate.getByDisk(&disks[i]); rec != nil && rec.PendingOffline {
+			disks[i].NoSleepReason = "上次下线未完成，请先恢复存储卷"
+			disks[i].NoOfflineReason = "上次下线未完成，请先恢复存储卷"
+			disks[i].CanSleep = false
+			disks[i].CanOffline = false
+		}
 	}
 	disks = c.mergeOfflinePlaceholders(disks)
 	return disks, nil
@@ -978,7 +1005,11 @@ func (c *Collector) trySmartctl(ctx context.Context, d *model.Disk, dev, dtype s
 	// smartctl returns non-zero for various benign conditions (e.g. SMART
 	// disabled, some attributes failing) but still prints JSON. We accept the
 	// payload whenever it parses and carries device info.
-	probe := model.Disk{}
+	probe := model.Disk{
+		Interface:  d.Interface,
+		Type:       d.Type,
+		Rotational: d.Rotational,
+	}
 	if err := smart.ParseSmartctl([]byte(out), &probe); err != nil {
 		return false
 	}
@@ -1021,6 +1052,9 @@ func mergeDisk(dst, src *model.Disk) {
 	dst.PercentUsed = src.PercentUsed
 	dst.PercentLifeRemain = src.PercentLifeRemain
 	dst.TotalBytesWritten = src.TotalBytesWritten
+	if src.WriteSource != "" {
+		dst.WriteSource = src.WriteSource
+	}
 	if src.LifeSource != "" {
 		dst.LifeSource = src.LifeSource
 	}
@@ -1038,7 +1072,9 @@ func mergeDisk(dst, src *model.Disk) {
 	if src.Type != "" && src.Type != model.TypeUnknown {
 		dst.Type = src.Type
 	}
-	dst.Rotational = src.Rotational
+	if src.Type == model.TypeNVMe || src.RotationRate > 0 || !dst.Rotational {
+		dst.Rotational = src.Rotational
+	}
 	if src.NVMe != nil {
 		dst.NVMe = src.NVMe
 	}

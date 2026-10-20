@@ -24,14 +24,14 @@ func buildWWN(j smartctlJSON) string {
 func phyEventCn(name string) string {
 	s := strings.ToLower(name)
 	switch {
-	case strings.Contains(s, "icrc"):
-		return "接口 CRC 错误"
-	case strings.Contains(s, "r_err"):
-		return "接收错误"
 	case strings.Contains(s, "command") && strings.Contains(s, "icrc"):
 		return "命令 CRC 错误"
 	case strings.Contains(s, "data") && strings.Contains(s, "icrc"):
 		return "数据 CRC 错误"
+	case strings.Contains(s, "icrc"):
+		return "接口 CRC 错误"
+	case strings.Contains(s, "r_err"):
+		return "接收错误"
 	case strings.Contains(s, "crc"):
 		return "CRC 错误"
 	case strings.Contains(s, "reset"):

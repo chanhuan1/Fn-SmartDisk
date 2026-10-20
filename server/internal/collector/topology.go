@@ -24,36 +24,48 @@ func (c *Collector) annotateTopology(disks []model.Disk, roots []lsblkNode) {
 		var chain []model.ChainHop
 		var vols []string
 		isSystem := false
-		var walk func(n lsblkNode)
-		walk = func(n lsblkNode) {
-			// skip the physical disk itself; record descendants
-			if n.Name != root.Name {
+		var walk func(n lsblkNode, depth int)
+		walk = func(n lsblkNode, depth int) {
+			mp := firstMount(n)
+			// A whole-disk filesystem has no partition child. Keep a
+			// synthetic first hop so both display and offline handling see it.
+			if n.Name != root.Name || mp != "" {
+				hopDepth := depth
+				if hopDepth < 1 {
+					hopDepth = 1
+				}
 				hop := model.ChainHop{
 					Name:  n.Name,
 					Type:  nodeTypeLabel(n),
 					Label: n.Label,
 					UUID:  n.UUID,
+					Depth: hopDepth,
+				}
+				if n.Name == root.Name {
+					hop.Type = n.FsType
+					if hop.Type == "" {
+						hop.Type = "整盘文件系统"
+					}
+					hop.IsPhysical = true
 				}
 				hop.IsRaid = n.FsType == "linux_raid_member" || strings.HasPrefix(n.Type, "raid")
 				if v, err := n.Size.Int64(); err == nil {
 					hop.Size = v
 				}
-				mp := firstMount(n)
 				hop.MountPoint = mp
 				chain = append(chain, hop)
-
-				if mp != "" {
-					vols = append(vols, mp)
-					if mp == "/" {
-						isSystem = true
-					}
+			}
+			if mp != "" {
+				vols = append(vols, mp)
+				if mp == "/" {
+					isSystem = true
 				}
 			}
 			for _, ch := range n.Children {
-				walk(ch)
+				walk(ch, depth+1)
 			}
 		}
-		walk(root)
+		walk(root, 0)
 
 		d.Chain = chain
 		d.VolumePaths = unique(vols)

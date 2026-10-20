@@ -1,6 +1,7 @@
 package smart
 
 import (
+	"strings"
 	"testing"
 
 	"smartdisk/internal/model"
@@ -50,6 +51,9 @@ func TestParseSATASSDLife(t *testing.T) {
 	if d.TotalBytesWritten != want {
 		t.Errorf("tbw=%d want %d", d.TotalBytesWritten, want)
 	}
+	if d.WriteSource == "" {
+		t.Error("SATA write source empty")
+	}
 	// Samsung 870 EVO uses vendor TBW estimate (attr241 written vs official TBW),
 	// which is more authoritative than Wear_Leveling_Count. 20TB written of 600TB.
 	if d.PercentUsed < 0 || d.PercentUsed > 10 {
@@ -86,6 +90,9 @@ func TestParseNVMe(t *testing.T) {
 	want := int64(83886080) * 1000 * 512
 	if d.TotalBytesWritten != want {
 		t.Errorf("tbw=%d want %d", d.TotalBytesWritten, want)
+	}
+	if !strings.Contains(d.WriteSource, "NVMe") {
+		t.Errorf("NVMe write source=%q", d.WriteSource)
 	}
 	// Full NVMe health log exposed for the SMART table.
 	if d.NVMe == nil {
@@ -139,6 +146,30 @@ func TestHealthUnknownWhenUnavailable(t *testing.T) {
 	}
 }
 
+func TestHealthDeferredExplainsAntiWakeReason(t *testing.T) {
+	d := model.Disk{SmartAvail: false, SmartDeferred: true}
+	Grade(&d)
+	if len(d.HealthNotes) != 1 || !strings.Contains(d.HealthNotes[0], "避免唤醒") {
+		t.Fatalf("deferred health note=%v", d.HealthNotes)
+	}
+	if strings.Contains(d.HealthNotes[0], "USB") {
+		t.Fatalf("deferred health note wrongly blames USB: %v", d.HealthNotes)
+	}
+}
+
+func TestPHYEventSpecificNames(t *testing.T) {
+	cases := map[string]string{
+		"Command iCRC errors": "命令 CRC 错误",
+		"Data iCRC errors":    "数据 CRC 错误",
+		"Other iCRC errors":   "接口 CRC 错误",
+	}
+	for in, want := range cases {
+		if got := phyEventCn(in); got != want {
+			t.Errorf("phyEventCn(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
 func TestBridgeDB(t *testing.T) {
 	lsusb := ParseLsusb("Bus 002 Device 003: ID 174c:55aa ASMedia Technology Inc. ASM1051E")
 	b := BridgeFor("174c", "55aa", lsusb)
@@ -156,15 +187,6 @@ func TestBridgeDB(t *testing.T) {
 	ord := PassthroughOrder(b2)
 	if len(ord) == 0 || ord[0] != b2.Passthrough {
 		t.Errorf("order=%v", ord)
-	}
-}
-
-func TestManufactureDateUnknown(t *testing.T) {
-	if got := InferManufactureDate("WDC", "WD-WCC7K3ABCDEF"); got != "未知" {
-		t.Errorf("got %q want 未知", got)
-	}
-	if got := InferManufactureDate("", ""); got != "未知" {
-		t.Errorf("got %q want 未知", got)
 	}
 }
 

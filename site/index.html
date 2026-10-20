@@ -3,256 +3,609 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fn-SmartDisk · 飞牛磁盘高级管理</title>
-<meta name="description" content="飞牛 fnOS 原生 fpk 应用，为每块硬盘提供专业 SMART 健康档案与内核级冷备盘深度下线 / 唤醒能力。">
-<meta name="theme-color" content="#070b16">
+<title>Fn-SmartDisk v1.2.0 · 飞牛磁盘高级管理</title>
+<meta name="description" content="Fn-SmartDisk v1.2.0，飞牛 fnOS 原生 fpk 应用，为每块硬盘提供专业 SMART 健康档案与内核级冷备盘深度下线、唤醒能力。">
+<meta name="theme-color" content="#080b10">
 <meta name="color-scheme" content="dark">
 <link rel="icon" type="image/png" href="icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Fn-SmartDisk">
-<meta property="og:title" content="Fn-SmartDisk · 飞牛磁盘高级管理">
-<meta property="og:description" content="专业 SMART 健康档案 · USB 桥接透传 · SSD 剩余寿命 · 内核级冷备盘下线 / 唤醒">
+<meta property="og:title" content="Fn-SmartDisk v1.2.0 · 飞牛磁盘高级管理">
+<meta property="og:description" content="专业 SMART 健康档案、USB 桥接透传、SSD 剩余寿命、内核级冷备盘下线与安全唤醒。">
 <meta property="og:image" content="icon.png">
 <meta property="og:locale" content="zh_CN">
 <style>
 :root {
-  --bg: #070b16;
-  --bg2: #0d1426;
-  --card: rgba(20, 28, 48, 0.72);
-  --line: rgba(120, 150, 220, 0.16);
-  --fg: #eaf0ff;
-  --dim: #93a2c4;
-  --acc: #3b82f6;
-  --acc2: #6366f1;
-  --radius: 16px;
+  --bg: #080b10;
+  --bg-2: #0c1219;
+  --panel: #111820;
+  --panel-2: #151e27;
+  --panel-3: #1a2530;
+  --line: rgba(142, 165, 182, .2);
+  --line-soft: rgba(142, 165, 182, .11);
+  --fg: #edf3f7;
+  --dim: #9baab7;
+  --muted: #6f808d;
+  --teal: #44d0c7;
+  --teal-soft: rgba(68, 208, 199, .12);
+  --mint: #80d98b;
+  --amber: #f0b75b;
+  --red: #ef746b;
+  --radius: 8px;
+  --radius-sm: 6px;
 }
+
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; scroll-behavior: smooth; }
+html, body { margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 body {
-  background: var(--bg);
-  color: var(--fg);
   min-height: 100vh;
-  font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  color: var(--fg);
+  font: 15px/1.7 "Avenir Next", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: linear-gradient(180deg, var(--bg), var(--bg-2) 58%, var(--bg));
 }
 body::before {
   content: "";
-  position: fixed; inset: 0; z-index: -1;
-  background:
-    radial-gradient(900px 520px at 12% -8%, rgba(59,130,246,.28), transparent 62%),
-    radial-gradient(760px 480px at 92% 4%, rgba(99,102,241,.24), transparent 60%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 55%, #050811 100%);
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(142, 165, 182, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(142, 165, 182, .035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 72%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 72%);
 }
-.wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-a { color: var(--acc); text-decoration: none; }
-a:hover { text-decoration: underline; }
+
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.btn svg, .feature-icon, .warning-box svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wrap { width: min(1100px, calc(100% - 48px)); margin: 0 auto; }
+a { color: var(--teal); text-decoration: none; }
+a:hover { text-decoration: none; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+}
 
 nav {
-  position: sticky; top: 0; z-index: 100;
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  background: rgba(7,11,22,.82);
-  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(8, 11, 16, .9);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
-.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-.nav-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none; }
-.nav-brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
-.nav-links a { color: var(--dim); font-weight: 500; }
-.nav-links a:hover { color: var(--fg); text-decoration: none; }
+.nav-inner {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg);
+  font-weight: 700;
+}
+.nav-brand img {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px rgba(68, 208, 199, .2);
+}
+.version {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: 11px/1.5 "SFMono-Regular", "Roboto Mono", ui-monospace, monospace;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 14px;
+}
+.nav-links a { color: var(--dim); font-weight: 600; }
+.nav-links a:hover { color: var(--fg); }
 
-header { padding: 64px 0 44px; text-align: center; }
+header { padding: 52px 0 38px; }
+.hero-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.hero-icon {
+  display: block;
+  width: 92px;
+  height: 92px;
+  margin: 0 0 18px;
+  border: 1px solid rgba(68, 208, 199, .28);
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 5px rgba(68, 208, 199, .045),
+    0 20px 52px -16px rgba(68, 208, 199, .38);
+}
 .badge-top {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 14px; border-radius: 999px;
-  background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.3);
-  font-size: 13px; font-weight: 600; letter-spacing: .08em;
-  color: #93c5fd; text-transform: uppercase;
-  margin-bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  margin: 0 0 20px;
+  border: 1px solid rgba(68, 208, 199, .28);
+  border-radius: 999px;
+  color: #a9e5df;
+  background: var(--teal-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
-.hero-icon { width: 96px; height: 96px; border-radius: 24px; margin-bottom: 18px; box-shadow: 0 12px 36px -8px rgba(59,130,246,.5); }
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 10px rgba(68, 208, 199, .75);
+}
 h1 {
-  margin: 12px 0 16px;
-  font-size: clamp(32px, 5.2vw, 50px);
-  line-height: 1.18; letter-spacing: -.02em;
-  background: linear-gradient(120deg, #fff 10%, #a5c7ff 50%, #c8b4ff 95%);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
+  margin: 0 0 16px;
+  color: var(--fg);
+  font-size: 56px;
+  line-height: 1.06;
+  font-weight: 750;
+  letter-spacing: 0;
 }
-.sub { max-width: 720px; margin: 0 auto; color: var(--dim); font-size: 16.5px; }
-.sub code { background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 4px; font-size: 13.5px; color: #c9d8ff; }
-.badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px; }
+.sub {
+  max-width: 760px;
+  margin: 0;
+  color: var(--dim);
+  font-size: 16.5px;
+  line-height: 1.8;
+}
+code {
+  padding: 1px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  color: #c2d9df;
+  background: rgba(255, 255, 255, .045);
+  font: 13px/1.5 "SFMono-Regular", "Roboto Mono", ui-monospace, monospace;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+}
 .badge {
-  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
-  background: rgba(255,255,255,.035); font-size: 13px; color: var(--dim);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--dim);
+  background: rgba(17, 24, 32, .72);
+  font-size: 12.5px;
 }
-.badge b { color: #c9d8ff; font-weight: 600; }
-.cta { display: flex; gap: 14px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+.badge b { color: #cfdee5; font-weight: 700; }
+.cta {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+}
 .btn {
-  padding: 12px 26px; border-radius: 12px; font-weight: 600; font-size: 15px;
-  display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, box-shadow .15s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--fg);
+  background: var(--panel);
+  font-size: 14px;
+  font-weight: 700;
+  transition: border-color .15s, background .15s, transform .15s;
 }
-.btn:hover { transform: translateY(-2px); text-decoration: none; }
-.btn-primary { background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #fff; box-shadow: 0 8px 24px -6px rgba(59,130,246,.55); }
-.btn-ghost { background: rgba(255,255,255,.05); border: 1px solid var(--line); color: var(--fg); }
+.btn:hover { transform: translateY(-1px); text-decoration: none; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn .github-icon { fill: currentColor; stroke: none; }
+.btn-primary {
+  border-color: var(--teal);
+  color: #062a28;
+  background: var(--teal);
+}
+.btn-primary:hover { background: #62ddd5; border-color: #62ddd5; }
+.btn-ghost:hover { border-color: rgba(142, 165, 182, .38); background: var(--panel-2); }
 
-section { padding: 38px 0; }
-h2 { font-size: 23px; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; letter-spacing: -.01em; }
-h2::before { content: ""; width: 4px; height: 20px; border-radius: 3px; background: linear-gradient(180deg, var(--acc), var(--acc2)); }
-.lead { color: var(--dim); margin: 0 0 20px; font-size: 14.5px; }
-.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+section { padding: 42px 0; }
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+h2::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 10px 3px 0;
+  border: 2px solid var(--teal);
+  transform: rotate(45deg);
+}
+.lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .card {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 24px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  display: flex; flex-direction: column; transition: border-color .2s, transform .2s;
+  min-height: 184px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(21, 30, 39, .94), rgba(15, 22, 29, .96));
+  transition: border-color .15s, background .15s;
 }
-.card:hover { border-color: rgba(140,175,255,.35); transform: translateY(-3px); }
-.card h3 { margin: 0 0 8px; font-size: 17px; color: #c9d8ff; display: flex; align-items: center; gap: 8px; }
-.card p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.75; }
-.card code { background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #c9d8ff; }
-.tag { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.3); color: #93c5fd; font-weight: 600; display: inline-block; margin-top: 14px; }
-.tag.ok { background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.35); color: #6ee7b7; }
-.tag.warn { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); color: #fcd34d; }
-.tag.err { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.35); color: #fca5a5; }
+.card:hover {
+  border-color: rgba(68, 208, 199, .34);
+  background: linear-gradient(180deg, rgba(22, 33, 42, .98), rgba(15, 23, 30, .98));
+}
+.card h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 9px;
+  color: #dce9ee;
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.feature-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 6px;
+  border: 1px solid rgba(68, 208, 199, .2);
+  border-radius: var(--radius-sm);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+.card p {
+  margin: 0;
+  color: var(--dim);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+.tag {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 14px;
+  color: var(--teal);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.tag.ok { color: var(--mint); }
+.tag.warn { color: var(--amber); }
+.tag.err { color: var(--red); }
 
-.step-list { display: flex; flex-direction: column; gap: 12px; max-width: 720px; margin: 0 auto; }
+.install-wrap { max-width: 780px; }
+.step-list {
+  display: grid;
+  gap: 10px;
+}
 .step {
-  display: flex; align-items: flex-start; gap: 14px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 16px 20px; backdrop-filter: blur(14px);
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, .72);
 }
 .step-num {
-  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--acc), var(--acc2));
-  display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff;
-  box-shadow: 0 4px 14px -2px rgba(59,130,246,.5);
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(68, 208, 199, .34);
+  border-radius: var(--radius-sm);
+  color: var(--teal);
+  background: var(--teal-soft);
+  font: 700 13px/1 "SFMono-Regular", ui-monospace, monospace;
 }
-.step b { display: block; color: #c9d8ff; font-size: 15px; margin-bottom: 2px; }
-.step span { color: var(--dim); font-size: 13.5px; }
-.step code { background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #c9d8ff; }
-
+.step b {
+  display: block;
+  margin-bottom: 2px;
+  color: #dce9ee;
+  font-size: 14.5px;
+}
+.step span {
+  display: block;
+  color: var(--dim);
+  font-size: 13.5px;
+}
 .warning-box {
-  max-width: 720px; margin: 28px auto 0;
-  background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.35);
-  border-radius: 14px; padding: 16px 20px; font-size: 13.5px; color: #fcd34d;
-  display: flex; align-items: flex-start; gap: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 15px 17px;
+  border: 1px solid rgba(240, 183, 91, .32);
+  border-radius: var(--radius);
+  color: #efd39f;
+  background: rgba(240, 183, 91, .08);
+  font-size: 13.5px;
 }
-.warning-box b { flex-shrink: 0; }
+.warning-box svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--amber);
+}
 
 footer {
-  padding: 32px 0 44px; text-align: center;
-  border-top: 1px solid var(--line); margin-top: 40px; font-size: 13px; color: #64748b;
+  margin-top: 36px;
+  padding: 28px 0 40px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12.5px;
 }
-footer a { color: #93a2c4; }
-footer a:hover { color: #c9d8ff; }
+footer a { color: var(--dim); }
+footer a:hover { color: var(--fg); }
+
+@media (max-width: 760px) {
+  .wrap { width: min(100% - 32px, 680px); }
+  header { padding: 34px 0 24px; }
+  section { padding: 34px 0; }
+  .hero-icon { width: 76px; height: 76px; border-radius: 18px; }
+  h1 { font-size: 42px; }
+  .sub { font-size: 15px; line-height: 1.75; }
+  .grid { grid-template-columns: 1fr; }
+  .card { min-height: 0; }
+  .section-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+
 @media (max-width: 640px) {
   .nav-links { display: none; }
-  header { padding: 44px 0 32px; }
-  .hero-icon { width: 72px; height: 72px; }
+  .nav-brand { font-size: 15px; }
+  .badges {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    padding-bottom: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .badges::-webkit-scrollbar { display: none; }
+  .badge { flex: none; }
+  .cta { gap: 8px; }
+  .cta { flex-direction: column; width: min(100%, 320px); }
+  .btn { width: 100%; min-height: 42px; }
+}
+
+@media (max-width: 420px) {
+  .wrap { width: calc(100% - 24px); }
+  h1 { font-size: 36px; }
+  .badge-top { margin-bottom: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+  }
 }
 </style>
 </head>
 <body>
 
+<svg class="icon-sprite" aria-hidden="true">
+  <symbol id="i-download" viewBox="0 0 24 24">
+    <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14"/>
+  </symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24">
+    <path d="M5 12h14m-5-5 5 5-5 5"/>
+  </symbol>
+  <symbol id="i-github" viewBox="0 0 24 24">
+    <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.17c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.68.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/>
+  </symbol>
+  <symbol id="i-health" viewBox="0 0 24 24">
+    <path d="M4 12h4l2-5 4 10 2-5h4"/>
+  </symbol>
+  <symbol id="i-lifespan" viewBox="0 0 24 24">
+    <rect x="6" y="6" width="12" height="12" rx="2"/>
+    <path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/>
+  </symbol>
+  <symbol id="i-topology" viewBox="0 0 24 24">
+    <circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/>
+    <path d="M7.5 12h4m0 0 5-5m-5 5 5 5"/>
+  </symbol>
+  <symbol id="i-power" viewBox="0 0 24 24">
+    <path d="M12 3v9"/><path d="M7.1 5.7a8 8 0 1 0 9.8 0"/>
+  </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24">
+    <path d="M12 3 5 6v5c0 4.5 2.8 8.2 7 10 4.2-1.8 7-5.5 7-10V6l-7-3Z"/>
+    <path d="m9 12 2 2 4-4"/>
+  </symbol>
+  <symbol id="i-note" viewBox="0 0 24 24">
+    <path d="M5 3h11l3 3v15H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>
+  </symbol>
+  <symbol id="i-sleep" viewBox="0 0 24 24">
+    <path d="M20 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 20 15.5Z"/>
+  </symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24">
+    <rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>
+  </symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24">
+    <path d="m12 3 9 17H3L12 3Z"/><path d="M12 9v5m0 3h.01"/>
+  </symbol>
+</svg>
+
 <nav>
   <div class="wrap nav-inner">
-    <a href="#" class="nav-brand"><img src="icon.png" alt="Fn-SmartDisk">Fn-SmartDisk</a>
+    <a href="#" class="nav-brand">
+      <img src="icon.png" alt="">
+      <span>Fn-SmartDisk</span>
+      <span class="version">v1.2.0</span>
+    </a>
     <div class="nav-links">
       <a href="#features">功能</a>
       <a href="#install">安装</a>
-      <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub 项目</a>
     </div>
   </div>
 </nav>
 
 <header>
-  <div class="wrap">
-    <div class="badge-top"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);box-shadow:0 0 12px rgba(59,130,246,.9);"></span>飞牛 fnOS 原生应用</div>
+  <div class="wrap hero-stack">
     <img class="hero-icon" src="icon.png" alt="Fn-SmartDisk 图标">
+    <div class="badge-top"><span class="status-dot"></span>飞牛 fnOS 原生应用</div>
     <h1>Fn-SmartDisk</h1>
-    <p class="sub">深度扩展飞牛 fnOS 官方磁盘面板：把散落在 <code>smartctl</code>、<code>lsblk</code>、<code>btrfs</code> 里的原始数据翻译成一份专业、可读、可操作的硬盘健康档案，并为冷备盘提供内核级深度下线与唤醒能力。</p>
+    <p class="sub">
+      把散落在 <code>smartctl</code>、<code>lsblk</code>、<code>btrfs</code> 里的原始数据整理成清晰、可验证的硬盘健康档案，并为冷备盘提供受保护的深度下线与唤醒能力。
+    </p>
     <div class="badges">
+      <span class="badge"><b>v1.2.0</b> 当前版本</span>
       <span class="badge">Go <b>+ Vue 3</b></span>
       <span class="badge">单二进制 <b>.fpk</b></span>
       <span class="badge">SATA / NVMe / USB <b>全介质</b></span>
       <span class="badge">中文 SMART <b>深度解析</b></span>
-      <span class="badge">冷备盘 <b>深度下线 / 唤醒</b></span>
     </div>
     <div class="cta">
-      <a class="btn btn-primary" href="https://github.com/chanhuan1/Fn-SmartDisk/releases" target="_blank" rel="noopener">下载 .fpk</a>
-      <a class="btn btn-ghost" href="#install">查看安装指南</a>
+      <a class="btn btn-primary" href="https://github.com/chanhuan1/Fn-SmartDisk/releases" target="_blank" rel="noopener">
+        <svg aria-hidden="true"><use href="#i-download"></use></svg>
+        下载 .fpk
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">
+        <svg class="github-icon" aria-hidden="true"><use href="#i-github"></use></svg>
+        GitHub 项目
+      </a>
+      <a class="btn btn-ghost" href="#install">
+        查看安装指南
+        <svg aria-hidden="true"><use href="#i-arrow"></use></svg>
+      </a>
     </div>
   </div>
 </header>
 
 <section id="features">
   <div class="wrap">
-    <h2>核心功能</h2>
-    <p class="lead">从盘面健康到电源控制，每块硬盘的完整生命周期都覆盖。</p>
+    <div class="section-head">
+      <div>
+        <h2>核心功能</h2>
+        <p class="lead">从盘面健康、链路状态到电源控制，围绕真实运维场景组织信息。</p>
+      </div>
+    </div>
     <div class="grid">
-      <div class="card">
-        <h3>🩺 深度健康检测</h3>
-        <p>全介质覆盖（SATA HDD / SSD、NVMe、USB 桥接盘），完整中文 SMART 属性表 + 厂商专属名 + 关键指标星标。自检历史、ATA 错误日志、设备统计、SCT 温度历史、磁头加载计数一应俱全。</p>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-health"></use></svg>磁盘健康检测</h3>
+        <p>覆盖 SATA HDD / SSD、NVMe 与 USB 桥接盘，展示中文 SMART 属性、自检历史、ATA 错误日志、设备统计和温度历史。</p>
         <span class="tag ok">只读采集</span>
-      </div>
-      <div class="card">
-        <h3>🧠 SSD 剩余寿命与主控识别</h3>
-        <p>NVMe 直接读取；SATA SSD 按主控厂商精准识别（群联 / 慧荣 / Intel / 三星），三星盘按官方 TBW 估算并标注来源。主控型号精准到群联 S11/S12、慧荣 SM22xx 等。</p>
-        <span class="tag ok">主控级精准</span>
-      </div>
-      <div class="card">
-        <h3>🔗 链路与存储诊断</h3>
-        <p>SATA 协商速率 vs 设备最大（掉速预警）、SATA PHY 错误、NVMe PCIe 链路、USB 桥接芯片识别（JMicron / ASMedia / Realtek 等）。btrfs 池错误计数 = 数据静默损坏的早期信号。</p>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-lifespan"></use></svg>SSD 寿命与主控识别</h3>
+        <p>NVMe 直接读取寿命；SATA SSD 结合主控厂商、属性单位和三星官方 TBW 估算，并明确标注数据来源。</p>
+        <span class="tag ok">来源可追溯</span>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-topology"></use></svg>链路与存储诊断</h3>
+        <p>识别 SATA 降速、PHY 错误、NVMe PCIe 链路、USB 桥接芯片和 btrfs 池错误，同时保留多分支存储链。</p>
         <span class="tag">早期预警</span>
-      </div>
-      <div class="card">
-        <h3>🔌 深度下线 / 唤醒</h3>
-        <p>懒卸载 → 停转 → 内核 <code>device offline</code>。飞牛后台与文件管理器都无法唤醒，冷备盘利器。唤醒 = running → 重扫总线 → 按 UUID 补挂载，SSE 实时步骤流。</p>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-power"></use></svg>深度下线与唤醒</h3>
+        <p>先同步并懒卸载，再停转和内核隔离；唤醒后重扫总线，按 UUID 补挂载，并通过 SSE 实时展示每一步。</p>
         <span class="tag err">仅 SATA HDD</span>
-      </div>
-      <div class="card">
-        <h3>🛡️ 多重保护机制</h3>
-        <p>系统盘禁止操作；md RAID 成员盘需独立确认阵列降级风险；正在读写的盘需独立确认数据风险。环形 200 条持久化日志，支持一键清空。</p>
-        <span class="tag warn">强确认</span>
-      </div>
-      <div class="card">
-        <h3>🏷️ 磁盘备注</h3>
-        <p>给每块盘写备注（如「冷备仓库盘 · 3 号位」），按序列号持久化，重启、换槽位不丢失。总览卡片、详情页、电源控制页三处同步显示。</p>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-shield"></use></svg>多重保护机制</h3>
+        <p>系统盘禁止操作；RAID 降级和读写中磁盘需要独立确认；恢复数据无法持久化时直接拒绝危险操作。</p>
+        <span class="tag warn">状态机保护</span>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-note"></use></svg>磁盘备注与操作日志</h3>
+        <p>备注按序列号持久化，换槽位不丢失；电源操作保留环形日志，总览、详情和电源页同步展示。</p>
         <span class="tag">持久化</span>
-      </div>
-      <div class="card">
-        <h3>💤 休眠盘安全采集</h3>
-        <p>采集与刷新都先经 <code>smartctl -n standby</code> 无唤醒探测电源状态，休眠中的盘只显示基础信息，点刷新也能看到真实休眠状态且不会把盘弄醒。用户逐盘确认后才读 SMART。</p>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-sleep"></use></svg>休眠盘安全采集</h3>
+        <p>采集和刷新先执行无唤醒电源探测，休眠盘只显示基础信息；只有确认后才读取可能唤醒磁盘的 SMART 数据。</p>
         <span class="tag ok">不误唤醒</span>
-      </div>
-      <div class="card">
-        <h3>🖥️ 原生 fpk 桌面集成</h3>
-        <p>以 fnOS 统一网关接入桌面（iframe 窗口 /app/SmartDisk），也可独立端口 8315 直连。深色运维控制台风格，移动端自适应。</p>
-        <span class="tag">fnOS 桌面</span>
-      </div>
+      </article>
+      <article class="card">
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-desktop"></use></svg>fnOS 原生集成</h3>
+        <p>通过统一网关接入桌面 iframe，也可使用独立端口直连。权限、网关前缀和静态资源随 fpk 一同交付。</p>
+        <span class="tag">原生 fpk</span>
+      </article>
     </div>
   </div>
 </section>
 
 <section id="install">
-  <div class="wrap">
-    <h2>安装到 fnOS</h2>
-    <p class="lead">三步完成，无需命令行。</p>
+  <div class="wrap install-wrap">
+    <div class="section-head">
+      <div>
+        <h2>安装到 fnOS</h2>
+        <p class="lead">在应用中心完成安装，不需要额外命令行配置。</p>
+      </div>
+    </div>
     <div class="step-list">
-      <div class="step"><div class="step-num">1</div><div><b>下载 .fpk 安装包</b><span>从 GitHub Releases 下载最新的 <code>SmartDisk.fpk</code> 文件。</span></div></div>
-      <div class="step"><div class="step-num">2</div><div><b>fnOS 应用中心 · 手动安装</b><span>打开 fnOS 桌面 → 应用中心 → 手动安装 → 上传 .fpk。</span></div></div>
-      <div class="step"><div class="step-num">3</div><div><b>桌面打开「磁盘高级管理」</b><span>通过统一网关 /app/SmartDisk 访问，也可通过端口 8315 直连。</span></div></div>
+      <div class="step">
+        <div class="step-num">1</div>
+        <div><b>下载 v1.2.0 安装包</b><span>从 GitHub Releases 获取最新的 <code>SmartDisk.fpk</code>。</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div><b>从应用中心手动安装</b><span>打开 fnOS 应用中心，选择手动安装并上传 fpk。</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div><b>打开磁盘高级管理</b><span>从桌面入口进入，默认通过统一网关 <code>/app/SmartDisk</code> 访问。</span></div>
+      </div>
     </div>
     <div class="warning-box">
-      <b>⚠️</b>
-      <div>SMART 采集为只读操作，但电源控制会执行停转、卸载和内核上下线动作。深度下线后飞牛后台无法唤醒，需要从本应用手动唤醒或重启 fnOS。请务必确认是冷备盘再下线。</div>
+      <svg aria-hidden="true"><use href="#i-warning"></use></svg>
+      <div>SMART 采集为只读操作。电源控制会执行停转、卸载和内核上下线动作，仅适用于已确认的冷备盘；深度下线后需从本应用手动唤醒。</div>
     </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p>Fn-SmartDisk · 飞牛 fnOS 磁盘高级管理 · <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub</a></p>
+    Fn-SmartDisk v1.2.0 · 飞牛 fnOS 磁盘高级管理 ·
+    <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub 项目</a>
   </div>
 </footer>
 

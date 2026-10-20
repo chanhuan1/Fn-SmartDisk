@@ -34,7 +34,6 @@ export interface SelfTestEntry {
 export interface ATAErrorEntry {
   errorNum: number;
   lifetimeH: number;
-  command?: string;
   description?: string;
 }
 
@@ -92,20 +91,7 @@ export interface ChainHop {
   label?: string;
   size?: number;
   mountPoint?: string;
-}
-
-export interface StorageNode {
-  name: string;
-  type: string;
-  label?: string;
-  size?: number;
-  fsType?: string;
-  mountPoint?: string;
-  used?: number;
-  usePercent: number;
-  diskId?: string;
-  health?: HealthGrade;
-  children?: StorageNode[];
+  depth?: number;
 }
 
 export interface SmartAttr {
@@ -161,6 +147,7 @@ export interface Disk {
   percentUsed: number;
   percentLifeRemain: number;
   totalBytesWritten: number;
+  writeSource?: string;
   lifeSource?: string;
   vendor?: string;
   controller?: string;
@@ -407,9 +394,6 @@ export const api = {
   disk: (id: string) => get<Disk>(`${API_BASE}/api/disks/${encodeURIComponent(id)}`),
   refreshDisk: (id: string) => post<Disk>(`${API_BASE}/api/disks/${encodeURIComponent(id)}/refresh`),
   health: () => get<{ ok: boolean; time: number; version?: string }>(`${API_BASE}/api/health`),
-  topology: () => get<{ tree: StorageNode[]; generated: number }>(`${API_BASE}/api/topology`),
-  sleep: (id: string) =>
-    postJSON<PowerResult>(`${API_BASE}/api/disks/${encodeURIComponent(id)}/sleep`),
   offline: (id: string, confirmRaid = false, confirmBusyIO = false) =>
     postJSON<PowerResult>(
       `${API_BASE}/api/disks/${encodeURIComponent(id)}/offline`,

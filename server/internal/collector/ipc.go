@@ -162,8 +162,11 @@ func handleConn(c *Collector, conn net.Conn) {
 	case "powerlog":
 		resp = response{OK: true, Log: c.PowerEvents(req.Limit)}
 	case "clearpowerlog":
-		c.ClearPowerEvents()
-		resp = response{OK: true}
+		if err := c.ClearPowerEvents(); err != nil {
+			resp = response{OK: false, Error: err.Error()}
+		} else {
+			resp = response{OK: true}
+		}
 	case "setnote":
 		d, err := c.SetNote(ctx, req.ID, req.Note)
 		if err != nil {

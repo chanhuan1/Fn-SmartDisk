@@ -17,6 +17,7 @@ export SMARTDISK_WEB_ROOT="${TRIM_APPDEST}/www"
 export SMARTDISK_GATEWAY="1"
 export SMARTDISK_GATEWAY_SOCKET="${TRIM_APPDEST}/app.sock"
 export SMARTDISK_GATEWAY_PREFIX="/app/SmartDisk"
+export SMARTDISK_GATEWAY_SOCKET_MODE="${SMARTDISK_GATEWAY_SOCKET_MODE:-0600}"
 # Runtime state (hibernate.json, power-events.json) must survive app and
 # system restarts; TRIM_PKGVAR is fnOS's per-app persistent var dir.
 export SMARTDISK_DATA_DIR="${TRIM_PKGVAR}"

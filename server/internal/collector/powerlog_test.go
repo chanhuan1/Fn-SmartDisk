@@ -69,6 +69,22 @@ func TestPowerLogRingCap(t *testing.T) {
 	}
 }
 
+func TestPowerLogPersistenceFailureRollsBack(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &powerLogStore{path: filepath.Join(blocker, "events.json"), evt: []model.PowerEvent{{DiskID: "sda", Action: "offline"}}}
+	before := len(s.list(0))
+	if err := s.clear(); err == nil {
+		t.Fatal("clear must fail when persistence fails")
+	}
+	if got := len(s.list(0)); got != before {
+		t.Fatalf("failed clear lost in-memory events: got %d want %d", got, before)
+	}
+}
+
 // Old builds could write duplicate records for one physical drive (one keyed
 // by kernel name, one by serial). loadHibernateStore must merge them, with
 // offline=true winning, so a stale online duplicate can't hide the offline

@@ -2,9 +2,9 @@ package collector
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +33,11 @@ type HibernateRecord struct {
 	Mounts      []MountRef `json:"mounts,omitempty"`    // UUID -> mountpoint pairs to restore
 	RaidMember  bool       `json:"raidMember"`
 	Offline     bool       `json:"offline"` // deep-offlined via this app
-	OfflineAt   int64      `json:"offlineAt,omitempty"`
-	UpdatedAt   int64      `json:"updatedAt"`
+	// PendingOffline marks an offline operation that has started but has not
+	// yet been finalized in sysfs. Collection reconciles it after a crash.
+	PendingOffline bool  `json:"pendingOffline,omitempty"`
+	OfflineAt      int64 `json:"offlineAt,omitempty"`
+	UpdatedAt      int64 `json:"updatedAt"`
 	// Note is the user-maintained label for this physical drive. It survives
 	// reboots and slot changes because records are keyed by serial.
 	Note string `json:"note,omitempty"`
@@ -48,7 +51,7 @@ type MountRef struct {
 	Noauto     bool   `json:"noauto,omitempty"` // skip auto re-mount on wake (raid member)
 }
 
-// hibernateStore is a JSON-file-backed map of disk id -> HibernateRecord.
+// hibernateStore is a JSON-file-backed map of stable disk key -> HibernateRecord.
 type hibernateStore struct {
 	path string
 	mu   sync.Mutex
@@ -111,52 +114,62 @@ func loadHibernateStore(path string) *hibernateStore {
 // mergeHibernateRecord folds src into dst, preferring the offline state and
 // the freshest recovery data. Used to dedupe duplicate records for one drive.
 func mergeHibernateRecord(dst, src *HibernateRecord) {
+	if src.PendingOffline && !dst.PendingOffline {
+		dst.PendingOffline = true
+	}
 	if src.Offline && !dst.Offline {
 		dst.Offline = true
 		dst.OfflineAt = src.OfflineAt
 	}
 	if src.UpdatedAt > dst.UpdatedAt {
 		// Fresher identity/recovery data wins, but keep the offline flag.
-		off, offAt := dst.Offline, dst.OfflineAt
+		off, pending, offAt := dst.Offline, dst.PendingOffline, dst.OfflineAt
 		*dst = *src
-		dst.Offline, dst.OfflineAt = off, offAt
+		dst.Offline, dst.PendingOffline, dst.OfflineAt = off, pending, offAt
 	}
 }
 
-func (s *hibernateStore) saveLocked() {
+func (s *hibernateStore) saveLocked() error {
 	if s.path == "" {
-		return
+		return nil
 	}
-	list := make([]*HibernateRecord, 0, len(s.recs))
-	for _, r := range s.recs {
+	keys := make([]string, 0, len(s.recs))
+	for key := range s.recs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	list := make([]*HibernateRecord, 0, len(keys))
+	for _, key := range keys {
+		r := s.recs[key]
+		if r == nil {
+			continue
+		}
 		list = append(list, r)
 	}
 	b, err := json.MarshalIndent(list, "", "  ")
 	if err != nil {
-		return
+		return fmt.Errorf("marshal hibernate state: %w", err)
 	}
-	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		log.Printf("[hibernate] write temp state %s: %v", tmp, err)
-		return
+	if err := writeAtomicFile(s.path, b, 0o600); err != nil {
+		return fmt.Errorf("persist hibernate state %s: %w", s.path, err)
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
-		log.Printf("[hibernate] rename state %s -> %s: %v", tmp, s.path, err)
-	}
+	return nil
 }
 
 // upsertFromDisk refreshes the recovery data for a live disk. Never touches
 // the Offline flag, so a collected (online) disk keeps its record fresh.
-func (s *hibernateStore) upsertFromDisk(d *model.Disk) {
+func (s *hibernateStore) upsertFromDisk(d *model.Disk) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := stableKey(d)
 	r := s.recs[key]
+	newRecord := false
 	if r == nil {
 		r = &HibernateRecord{}
+		newRecord = true
 		s.recs[key] = r
 	}
+	old := *r
 	r.ID = d.ID
 	r.Name = d.Name
 	r.Model = d.Model
@@ -226,23 +239,68 @@ func (s *hibernateStore) upsertFromDisk(d *model.Disk) {
 		}
 	}
 	r.UpdatedAt = time.Now().Unix()
-	s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if newRecord {
+			delete(s.recs, key)
+		} else {
+			*r = old
+		}
+		return err
+	}
+	return nil
 }
 
-// markOffline flags a disk as deep-offlined.
-func (s *hibernateStore) markOffline(key string, offline bool) {
+// beginOffline records the intent before any mount is detached.
+func (s *hibernateStore) beginOffline(key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if r := s.recs[key]; r != nil {
-		r.Offline = offline
-		if offline {
-			r.OfflineAt = time.Now().Unix()
-		} else {
-			r.OfflineAt = 0
-		}
-		r.UpdatedAt = time.Now().Unix()
-		s.saveLocked()
+	r := s.recs[key]
+	if r == nil {
+		return fmt.Errorf("hibernate record %q does not exist", key)
 	}
+	old := *r
+	r.PendingOffline = true
+	r.Offline = false
+	r.OfflineAt = 0
+	r.UpdatedAt = time.Now().Unix()
+	return s.saveWithRollbackLocked(r, old)
+}
+
+// markOffline finalizes a successful offline or clears the state.
+func (s *hibernateStore) markOffline(key string, offline bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.recs[key]
+	if r == nil {
+		return fmt.Errorf("hibernate record %q does not exist", key)
+	}
+	old := *r
+	r.Offline = offline
+	r.PendingOffline = false
+	if offline {
+		r.OfflineAt = time.Now().Unix()
+	} else {
+		r.OfflineAt = 0
+	}
+	r.UpdatedAt = time.Now().Unix()
+	return s.saveWithRollbackLocked(r, old)
+}
+
+// cancelOffline clears an unfinished intent without touching other recovery
+// data.
+func (s *hibernateStore) cancelOffline(key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.recs[key]
+	if r == nil {
+		return fmt.Errorf("hibernate record %q does not exist", key)
+	}
+	old := *r
+	r.PendingOffline = false
+	r.Offline = false
+	r.OfflineAt = 0
+	r.UpdatedAt = time.Now().Unix()
+	return s.saveWithRollbackLocked(r, old)
 }
 
 // noteFor returns the persisted user note for a disk by stable identity, or
@@ -256,21 +314,40 @@ func (s *hibernateStore) noteFor(d *model.Disk) string {
 
 // setNote updates the user note on the record matching this disk, creating a
 // minimal record when none exists (e.g. note added before first full scan).
-func (s *hibernateStore) setNote(d *model.Disk, note string) {
+func (s *hibernateStore) setNote(d *model.Disk, note string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := stableKey(d)
 	r := s.recs[key]
+	newRecord := false
 	if r == nil {
 		if note == "" {
-			return
+			return nil
 		}
 		r = &HibernateRecord{ID: d.ID, Name: d.Name}
 		s.recs[key] = r
+		newRecord = true
 	}
+	old := *r
 	r.Note = note
 	r.UpdatedAt = time.Now().Unix()
-	s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if newRecord {
+			delete(s.recs, key)
+		} else {
+			*r = old
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *hibernateStore) saveWithRollbackLocked(r *HibernateRecord, old HibernateRecord) error {
+	if err := s.saveLocked(); err != nil {
+		*r = old
+		return err
+	}
+	return nil
 }
 
 // get returns a copy of the record for key, or nil.
@@ -301,6 +378,20 @@ func (s *hibernateStore) offlineRecords() []HibernateRecord {
 	var out []HibernateRecord
 	for _, r := range s.recs {
 		if r.Offline {
+			out = append(out, *r)
+		}
+	}
+	return out
+}
+
+// pendingRecords returns copies of operations interrupted before sysfs
+// offline could be finalized.
+func (s *hibernateStore) pendingRecords() []HibernateRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []HibernateRecord
+	for _, r := range s.recs {
+		if r.PendingOffline {
 			out = append(out, *r)
 		}
 	}

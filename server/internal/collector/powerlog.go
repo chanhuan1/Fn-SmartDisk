@@ -2,9 +2,8 @@ package collector
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -36,44 +35,49 @@ func loadPowerLogStore(path string) *powerLogStore {
 }
 
 // add appends an event and persists (capped at powerLogMax, dropping oldest).
-func (s *powerLogStore) add(e model.PowerEvent) {
+func (s *powerLogStore) add(e model.PowerEvent) error {
 	if e.Time == 0 {
 		e.Time = time.Now().Unix()
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	old := append([]model.PowerEvent(nil), s.evt...)
 	s.evt = append(s.evt, e)
 	if len(s.evt) > powerLogMax {
 		s.evt = s.evt[len(s.evt)-powerLogMax:]
 	}
-	s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.evt = old
+		return err
+	}
+	return nil
 }
 
-func (s *powerLogStore) saveLocked() {
+func (s *powerLogStore) saveLocked() error {
 	if s.path == "" {
-		return
+		return nil
 	}
 	b, err := json.MarshalIndent(s.evt, "", "  ")
 	if err != nil {
-		return
+		return fmt.Errorf("marshal power log: %w", err)
 	}
-	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		log.Printf("[powerlog] write temp events %s: %v", tmp, err)
-		return
+	if err := writeAtomicFile(s.path, b, 0o600); err != nil {
+		return fmt.Errorf("persist power log %s: %w", s.path, err)
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
-		log.Printf("[powerlog] rename events %s -> %s: %v", tmp, s.path, err)
-	}
+	return nil
 }
 
 // clear removes every persisted event and empties the ring buffer.
-func (s *powerLogStore) clear() {
+func (s *powerLogStore) clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	old := s.evt
 	s.evt = nil
-	s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.evt = old
+		return err
+	}
+	return nil
 }
 
 // list returns up to limit events, newest first. limit<=0 means all.

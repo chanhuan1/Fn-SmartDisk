@@ -191,9 +191,7 @@ const unsafeInfo = computed(() => {
 // Write-amount basis note (how totalBytesWritten was derived).
 const writeBasis = computed(() => {
   if (!d.value) return "";
-  return d.value.type === "NVMe"
-    ? "按 NVMe data_units_written × 512000 字节计算"
-    : "按 SMART Total_LBAs_Written × 512 字节计算";
+  return d.value.writeSource || "写入单位未知";
 });
 
 // Available-spare bar (NVMe): spare % vs threshold.
@@ -266,6 +264,16 @@ const showSelfTests = computed(() => (d.value?.selfTests?.length ?? 0) > 0);
 const showErrorLog = computed(() => (d.value?.ataErrorLog?.length ?? 0) > 0);
 const showDevStats = computed(() => (d.value?.devStats?.length ?? 0) > 0);
 const showPartitions = computed(() => (d.value?.partitions?.length ?? 0) > 0);
+
+function chainIndent(depth?: number): string {
+  return `${Math.max(0, (depth ?? 1) - 1) * 18}px`;
+}
+
+function chainArrow(index: number): string {
+  const chain = d.value?.chain ?? [];
+  if (index === 0) return "→";
+  return (chain[index]?.depth ?? 1) <= (chain[index - 1]?.depth ?? 1) ? "↳" : "→";
+}
 
 const showTempHistory = computed(() => {
   const t = d.value?.tempHistory;
@@ -586,8 +594,8 @@ const dataIsStale = computed(() => {
               <div class="chain-type">物理盘</div>
             </div>
             <template v-for="(h, i) in d.chain" :key="i">
-              <div class="chain-arrow">→</div>
-              <div class="chain-node">
+              <div class="chain-arrow" :style="{ marginLeft: chainIndent(h.depth) }">{{ chainArrow(i) }}</div>
+              <div class="chain-node" :style="{ marginLeft: chainIndent(h.depth) }">
                 <div class="chain-name">{{ h.name }}</div>
                 <div class="chain-type">{{ h.type }}<span v-if="h.label"> · {{ h.label }}</span></div>
                 <div class="chain-sub" v-if="h.mountPoint">{{ h.mountPoint }}</div>

@@ -23,7 +23,7 @@ func (c *Collector) fillBtrfsErrors(ctx context.Context, d *model.Disk) {
 		if !strings.HasPrefix(mp, "/vol") && mp != "/" {
 			continue
 		}
-		dev := lastChainDevice(d)
+		dev := chainDeviceForMount(d, mp)
 		if dev == "" {
 			continue
 		}
@@ -36,17 +36,21 @@ func (c *Collector) fillBtrfsErrors(ctx context.Context, d *model.Disk) {
 	}
 }
 
-// lastChainDevice returns the device path of the final hop in the disk's
-// storage chain. In fnOS this is the lvm/dm node backing the btrfs volume;
-// when there's no lvm layer it's the md or partition device. btrfsDeviceStats
-// falls back to the pool's single device when the path doesn't match, so a
-// simplified last-hop lookup is sufficient here.
-func lastChainDevice(d *model.Disk) string {
-	if len(d.Chain) == 0 {
+// chainDeviceForMount returns the deepest chain node mounted at mp. This keeps
+// branch A separate from branch B on disks that expose multiple filesystems.
+func chainDeviceForMount(d *model.Disk, mp string) string {
+	bestDepth := -1
+	bestName := ""
+	for _, hop := range d.Chain {
+		if hop.MountPoint == mp && hop.Depth >= bestDepth {
+			bestDepth = hop.Depth
+			bestName = hop.Name
+		}
+	}
+	if bestName == "" {
 		return ""
 	}
-	last := d.Chain[len(d.Chain)-1]
-	return "/dev/" + last.Name
+	return "/dev/" + bestName
 }
 
 // btrfsDeviceStats runs `btrfs device stats <mount>` and returns the error

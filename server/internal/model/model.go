@@ -92,12 +92,13 @@ type Disk struct {
 	UnsafeShutdowns int64 `json:"unsafeShutdowns,omitempty"`
 
 	// Life
-	PercentUsed       int    `json:"percentUsed"`          // 0-100, -1 if unknown
-	PercentLifeRemain int    `json:"percentLifeRemain"`    // 0-100, -1 if unknown
-	TotalBytesWritten int64  `json:"totalBytesWritten"`    // 0 if unknown
-	LifeSource        string `json:"lifeSource,omitempty"` // provenance of the life estimate
-	Vendor            string `json:"vendor,omitempty"`     // detected SSD controller vendor
-	Controller        string `json:"controller,omitempty"` // SSD controller label (e.g. 群联 Phison S11)
+	PercentUsed       int    `json:"percentUsed"`           // 0-100, -1 if unknown
+	PercentLifeRemain int    `json:"percentLifeRemain"`     // 0-100, -1 if unknown
+	TotalBytesWritten int64  `json:"totalBytesWritten"`     // 0 if unknown
+	WriteSource       string `json:"writeSource,omitempty"` // provenance of the written-bytes estimate
+	LifeSource        string `json:"lifeSource,omitempty"`  // provenance of the life estimate
+	Vendor            string `json:"vendor,omitempty"`      // detected SSD controller vendor
+	Controller        string `json:"controller,omitempty"`  // SSD controller label (e.g. 群联 Phison S11)
 
 	SmartSupported bool `json:"smartSupported"`
 	SmartEnabled   bool `json:"smartEnabled"`
@@ -235,6 +236,7 @@ type ChainHop struct {
 	Size       int64  `json:"size,omitempty"`
 	UUID       string `json:"uuid,omitempty"`
 	MountPoint string `json:"mountPoint,omitempty"`
+	Depth      int    `json:"depth,omitempty"`      // indentation depth in the flat chain view
 	IsRaid     bool   `json:"isRaid,omitempty"`     // node is an md RAID device (fstype linux_raid_member or type raid*)
 	IsPhysical bool   `json:"isPhysical,omitempty"` // node is a whole-disk or partition (vs md/lvm virtual)
 }
@@ -269,7 +271,6 @@ type SelfTestEntry struct {
 type ATAErrorEntry struct {
 	ErrorNum    int    `json:"errorNum"`
 	LifetimeH   int64  `json:"lifetimeH"`
-	Command     string `json:"command,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 

@@ -23,6 +23,7 @@ const confirmSmartRead = ref(false);
 const smartReadBusy = ref(false);
 const smartReadProgress = ref("");
 const smartReadError = ref("");
+const refreshAfterSmartSkip = ref(false);
 const now = ref(Math.floor(Date.now() / 1000));
 let ageTimer = 0;
 
@@ -132,10 +133,20 @@ async function saveNote(d: Summary) {
 function requestRefresh() {
   if (deferredDisks.value.length) {
     smartReadError.value = "";
+    refreshAfterSmartSkip.value = true;
     confirmSmartRead.value = true;
     return;
   }
+  refreshAfterSmartSkip.value = false;
   void load(true);
+}
+
+function skipSmartRead() {
+  confirmSmartRead.value = false;
+  if (refreshAfterSmartSkip.value) {
+    refreshAfterSmartSkip.value = false;
+    void load(true);
+  }
 }
 
 async function readDeferredDisks() {
@@ -154,6 +165,7 @@ async function readDeferredDisks() {
       await api.refreshDisk(target.id);
       data.value = await api.overview();
     }
+    refreshAfterSmartSkip.value = false;
     confirmSmartRead.value = false;
   } catch (e: any) {
     smartReadError.value = e?.message || "读取 SMART 失败，可重试或先查看基础信息";
@@ -388,7 +400,7 @@ const capColor = computed(() => {
     :progress="smartReadProgress"
     :error="smartReadError"
     @accept="readDeferredDisks"
-    @skip="confirmSmartRead = false"
+    @skip="skipSmartRead"
   />
 </template>
 

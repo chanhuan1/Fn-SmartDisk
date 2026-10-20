@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -116,6 +117,9 @@ func (c *Collector) Sleep(ctx context.Context, id string) (*PowerResult, error) 
 		return nil, err
 	}
 	computePowerCaps(d)
+	if isSystemDisk(d) {
+		return nil, ErrSystemDisk
+	}
 	if !d.CanSleep {
 		return nil, fmt.Errorf("%w：%s", ErrNotHDD, d.NoSleepReason)
 	}
@@ -143,7 +147,9 @@ func (c *Collector) logPower(d *model.Disk, action string, ok bool, detail strin
 		e.DiskID = d.ID
 		e.Model = d.Model
 	}
-	c.powerLog.add(e)
+	if err := c.powerLog.add(e); err != nil {
+		log.Printf("[powerlog] %v", err)
+	}
 }
 
 // Offline deep-hibernates a disk: sync, umount its volumes, spin down, then
@@ -171,6 +177,9 @@ func (c *Collector) offline(ctx context.Context, id string, octx offlineCtx) (*P
 	}
 	steps := octx.steps
 	computePowerCaps(d)
+	if isSystemDisk(d) {
+		return nil, ErrSystemDisk
+	}
 	if !d.CanOffline {
 		return nil, fmt.Errorf("%w：%s", ErrNotHDD, d.NoOfflineReason)
 	}
@@ -187,12 +196,40 @@ func (c *Collector) offline(ctx context.Context, id string, octx offlineCtx) (*P
 		}
 	}
 
-	// Make sure the recovery record is fresh before the disk disappears.
-	c.hibernate.upsertFromDisk(d)
+	mounts := mountPointsOf(d)
+	for _, mp := range mounts {
+		if err := validateMountPoint(mp); err != nil {
+			c.logPower(d, "offline", false, "拒绝非法挂载点: "+mp)
+			return nil, err
+		}
+	}
+
+	// Persist recovery data and the in-progress intent before touching mounts.
+	if err := c.hibernate.upsertFromDisk(d); err != nil {
+		c.logPower(d, "offline", false, "恢复数据持久化失败: "+err.Error())
+		return nil, fmt.Errorf("恢复数据持久化失败: %w", err)
+	}
+	rec := c.hibernate.getByDisk(d)
+	if rec == nil {
+		return nil, errors.New("无法读取下线恢复记录")
+	}
+	recCopy := *rec
+	if err := c.hibernate.beginOffline(stableKey(d)); err != nil {
+		c.logPower(d, "offline", false, "下线状态持久化失败: "+err.Error())
+		return nil, fmt.Errorf("下线状态持久化失败: %w", err)
+	}
 
 	// 1. flush dirty pages so umount is fast and clean.
 	steps.emit("sync", "同步数据 (sync)")
-	_, _, _ = c.run.Run(ctx, "sync")
+	if out, stderr, err := c.run.Run(ctx, "sync"); err != nil {
+		cancelErr := c.hibernate.cancelOffline(stableKey(d))
+		e := fmt.Errorf("同步数据失败: %v (%s%s)", err, strings.TrimSpace(out), strings.TrimSpace(stderr))
+		if cancelErr != nil {
+			e = fmt.Errorf("%w；清理下线状态失败: %v", e, cancelErr)
+		}
+		c.logPower(d, "offline", false, e.Error())
+		return nil, e
+	}
 
 	// 2. lazily umount every mount point reachable from this disk. We use
 	// `umount -l`: fnOS keeps a read-only monitor handle (trim_file_monit)
@@ -201,15 +238,18 @@ func (c *Collector) offline(ctx context.Context, id string, octx offlineCtx) (*P
 	// kernel finishes cleanup once the monitor releases it; combined with
 	// the sync above and the device going offline right after, this is the
 	// approach the community cold-backup guides rely on.
-	mounts := mountPointsOf(d)
 	for _, mp := range mounts {
-		if err := validateMountPoint(mp); err != nil {
-			c.logPower(d, "offline", false, "拒绝非法挂载点: "+mp)
-			return nil, err
-		}
 		steps.emit("umount", "懒卸载卷 "+mp)
 		if out, _, err := c.run.Run(ctx, "umount", "-l", mp); err != nil {
+			rollbackErrs := c.rollbackOfflineMounts(&recCopy, mounts, steps)
+			cancelErr := c.hibernate.cancelOffline(stableKey(d))
 			e := fmt.Errorf("懒卸载 %s 失败: %v (%s)", mp, err, strings.TrimSpace(out))
+			if len(rollbackErrs) > 0 {
+				e = fmt.Errorf("%w；回滚失败: %s", e, strings.Join(rollbackErrs, "; "))
+			}
+			if cancelErr != nil {
+				e = fmt.Errorf("%w；清理下线状态失败: %v", e, cancelErr)
+			}
 			c.logPower(d, "offline", false, e.Error())
 			return nil, e
 		}
@@ -222,14 +262,28 @@ func (c *Collector) offline(ctx context.Context, id string, octx offlineCtx) (*P
 	// 4. kernel-level isolation.
 	steps.emit("offline", "内核标记 device offline")
 	if err := c.writeSysfsState(ctx, d.ID, "offline"); err != nil {
-		// Best-effort rollback: remount what we unmounted.
-		for _, mp := range mounts {
-			_, _, _ = c.run.Run(ctx, "mount", mp)
-		}
+		rollbackErrs := c.rollbackOfflineMounts(&recCopy, mounts, steps)
+		cancelErr := c.hibernate.cancelOffline(stableKey(d))
 		c.logPower(d, "offline", false, "写入内核 offline 失败: "+err.Error())
-		return nil, fmt.Errorf("写入内核 offline 状态失败: %w", err)
+		if len(rollbackErrs) > 0 {
+			err = fmt.Errorf("写入内核 offline 状态失败: %w；回滚失败: %s", err, strings.Join(rollbackErrs, "; "))
+		} else {
+			err = fmt.Errorf("写入内核 offline 状态失败: %w", err)
+		}
+		if cancelErr != nil {
+			err = fmt.Errorf("%w；清理下线状态失败: %v", err, cancelErr)
+		}
+		return nil, err
 	}
-	c.hibernate.markOffline(stableKey(d), true)
+	if err := c.hibernate.markOffline(stableKey(d), true); err != nil {
+		c.logPower(d, "offline", false, "内核已下线但状态持久化失败: "+err.Error())
+		d.PowerState = "offline"
+		d.Hibernated = true
+		d.OfflineAt = time.Now().Unix()
+		computePowerCaps(d)
+		c.updateCachedPowerState(d.ID, d)
+		return nil, fmt.Errorf("内核已下线，但状态持久化失败: %w", err)
+	}
 
 	d.PowerState = "offline"
 	d.Hibernated = true
@@ -305,27 +359,12 @@ func (c *Collector) wake(ctx context.Context, id string, steps stepEmitter) (*Po
 	// Device is back: force a bus rescan so the partition table is re-read.
 	// Doing this after the device is present lets the kernel reassemble an
 	// md array (member visible) before we look for mounts to restore.
-	_ = c.writeSysfsRescan(ctx, devID)
+	rescanErr := c.writeSysfsRescan(ctx, devID)
 
 	// Restore mounts that did not come back automatically.
-	var remountErrs []string
-	var remounted []string
-	for _, m := range rec.Mounts {
-		if m.Noauto || m.UUID == "" || m.MountPoint == "" {
-			continue
-		}
-		if err := validateMountPoint(m.MountPoint); err != nil {
-			remountErrs = append(remountErrs, m.MountPoint+": 非法挂载点，已跳过")
-			continue
-		}
-		if isMounted(ctx, c.run, m.MountPoint) {
-			continue
-		}
-		if out, _, err := c.run.Run(ctx, "mount", "UUID="+m.UUID, m.MountPoint); err != nil {
-			remountErrs = append(remountErrs, fmt.Sprintf("%s: %v (%s)", m.MountPoint, err, strings.TrimSpace(out)))
-		} else {
-			remounted = append(remounted, m.MountPoint)
-		}
+	remounted, remountErrs := c.restoreMountRefsSplit(ctx, rec, nil, false, steps)
+	if rescanErr != nil {
+		remountErrs = append(remountErrs, "总线重扫失败: "+rescanErr.Error())
 	}
 	if len(remounted) > 0 {
 		steps.emit("remount", "补挂载 "+strings.Join(remounted, ", "))
@@ -334,7 +373,9 @@ func (c *Collector) wake(ctx context.Context, id string, steps stepEmitter) (*Po
 	// so the UI still offers Wake (and the operator can see it is degraded)
 	// instead of the disk silently dropping off the panel.
 	if len(remountErrs) == 0 {
-		c.hibernate.markOffline(stableKeyRec(rec), false)
+		if err := c.hibernate.markOffline(stableKeyRec(rec), false); err != nil {
+			return nil, fmt.Errorf("磁盘已上线，但清理下线状态失败: %w", err)
+		}
 	}
 
 	// Refresh ONLY the woken disk's cache entry. A full Refresh would run
@@ -346,16 +387,17 @@ func (c *Collector) wake(ctx context.Context, id string, steps stepEmitter) (*Po
 	if rerr != nil {
 		return nil, fmt.Errorf("磁盘已唤醒，但刷新该盘数据失败: %w", rerr)
 	}
-	msg := devID + " 已唤醒上线（请前往飞牛「硬盘设置」点击「挂载硬盘」后访问数据）"
-	degraded := false
+	msg := devID + " 已唤醒上线"
 	// Degraded-array guard: only a genuine regression counts. If the disk had
 	// NO mounted volume when it was offlined (rec.VolumePaths empty), having
 	// none after wake is normal — not a failure. Only flag it when a volume
 	// that WAS mounted before offline failed to come back.
-	hadVolumes := len(rec.VolumePaths) > 0 || len(rec.Mounts) > 0
-	if hadVolumes && d != nil && !raidVolumeBack(d) {
-		degraded = true
-		msg += "；⚠️ 提示：唤醒前有挂载的存储空间暂未回挂，请在飞牛中检查（可能需在存储管理手动挂载，或阵列未自动重组需 mdadm --assemble）"
+	expected := expectedVolumePaths(rec)
+	missing := missingVolumePaths(expected, d.VolumePaths)
+	degraded := len(missing) > 0
+	if degraded {
+		msg += "；提示：以下原有存储空间暂未回挂: " + strings.Join(missing, ", ") +
+			"（可能需在存储管理手动挂载，或阵列未自动重组需 mdadm --assemble）"
 	}
 	if len(remountErrs) > 0 {
 		msg += "（部分挂载点恢复失败: " + strings.Join(remountErrs, "; ") + "）"
@@ -371,11 +413,126 @@ func (c *Collector) wake(ctx context.Context, id string, steps stepEmitter) (*Po
 	return &PowerResult{OK: true, Message: msg, Disk: d}, nil
 }
 
-// raidVolumeBack reports whether a RAID-member disk regained at least one
-// mount point after wake. When a degraded/offlined member is rescanned the
-// array often stays down, so none of its volumes reappear.
-func raidVolumeBack(d *model.Disk) bool {
-	return len(d.VolumePaths) > 0
+func expectedVolumePaths(rec *HibernateRecord) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, mp := range rec.VolumePaths {
+		if mp != "" && !seen[mp] {
+			seen[mp] = true
+			out = append(out, mp)
+		}
+	}
+	for _, m := range rec.Mounts {
+		if m.MountPoint != "" && !seen[m.MountPoint] {
+			seen[m.MountPoint] = true
+			out = append(out, m.MountPoint)
+		}
+	}
+	return out
+}
+
+func missingVolumePaths(expected, current []string) []string {
+	have := map[string]bool{}
+	for _, mp := range current {
+		have[mp] = true
+	}
+	var missing []string
+	for _, mp := range expected {
+		if mp != "" && !have[mp] {
+			missing = append(missing, mp)
+		}
+	}
+	return missing
+}
+
+func (c *Collector) restoreMountRefs(ctx context.Context, rec *HibernateRecord, only []string, includeNoauto bool, steps stepEmitter) []string {
+	_, errs := c.restoreMountRefsSplit(ctx, rec, only, includeNoauto, steps)
+	return errs
+}
+
+func (c *Collector) rollbackOfflineMounts(rec *HibernateRecord, only []string, steps stepEmitter) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return c.restoreMountRefs(ctx, rec, only, true, steps)
+}
+
+func (c *Collector) restoreMountRefsSplit(ctx context.Context, rec *HibernateRecord, only []string, includeNoauto bool, steps stepEmitter) ([]string, []string) {
+	wanted := map[string]bool{}
+	for _, mp := range only {
+		wanted[mp] = true
+	}
+	var remounted []string
+	var errs []string
+	for _, m := range rec.Mounts {
+		if (m.Noauto && !includeNoauto) || m.UUID == "" || m.MountPoint == "" {
+			continue
+		}
+		if len(wanted) > 0 && !wanted[m.MountPoint] {
+			continue
+		}
+		if err := validateMountPoint(m.MountPoint); err != nil {
+			errs = append(errs, m.MountPoint+": 非法挂载点，已跳过")
+			continue
+		}
+		if isMounted(ctx, c.run, m.MountPoint) {
+			continue
+		}
+		steps.emit("mount", "恢复挂载 "+m.MountPoint)
+		if out, _, err := c.run.Run(ctx, "mount", "UUID="+m.UUID, m.MountPoint); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v (%s)", m.MountPoint, err, strings.TrimSpace(out)))
+		} else {
+			remounted = append(remounted, m.MountPoint)
+		}
+	}
+	return remounted, errs
+}
+
+// reconcilePendingOffline repairs operations interrupted between mount detach
+// and final sysfs state persistence.
+func (c *Collector) reconcilePendingOffline(ctx context.Context, disks []model.Disk, offlineStates []bool) error {
+	live := map[string]int{}
+	for i := range disks {
+		live[stableKey(&disks[i])] = i
+	}
+	for _, rec := range c.hibernate.pendingRecords() {
+		key := stableKeyRec(&rec)
+		i, ok := live[key]
+		if !ok {
+			if err := c.hibernate.markOffline(key, true); err != nil {
+				return fmt.Errorf("finalize interrupted offline state for %s: %w", rec.ID, err)
+			}
+			continue
+		}
+		if offlineStates[i] {
+			if err := c.hibernate.markOffline(key, true); err != nil {
+				return fmt.Errorf("finalize interrupted offline state for %s: %w", rec.ID, err)
+			}
+			continue
+		}
+		remounted, errs := c.restoreMountRefsSplit(ctx, &rec, nil, true, stepEmitter{})
+		current := append([]string(nil), disks[i].VolumePaths...)
+		current = append(current, remounted...)
+		if missing := missingVolumePaths(expectedVolumePaths(&rec), current); len(missing) > 0 {
+			errs = append(errs, "未回挂: "+strings.Join(missing, ", "))
+		}
+		if len(errs) > 0 {
+			log.Printf("[hibernate] interrupted offline recovery for %s: %s", rec.ID, strings.Join(errs, "; "))
+			disks[i].Health = model.GradeWarning
+			disks[i].HealthNotes = append(disks[i].HealthNotes, "上次下线未完成，部分存储卷恢复失败")
+			disks[i].CanSleep = false
+			disks[i].CanOffline = false
+			disks[i].NoSleepReason = "上次下线未完成，请先恢复存储卷"
+			disks[i].NoOfflineReason = "上次下线未完成，请先恢复存储卷"
+			continue
+		}
+		if len(remounted) > 0 {
+			log.Printf("[hibernate] restored interrupted offline mounts for %s: %s", rec.ID, strings.Join(remounted, ", "))
+		}
+		if err := c.hibernate.cancelOffline(key); err != nil {
+			return fmt.Errorf("clear interrupted offline state for %s: %w", rec.ID, err)
+		}
+	}
+	return nil
 }
 
 // validateMountPoint rejects anything that is not a safe absolute mount path.
@@ -460,7 +617,6 @@ func (c *Collector) refreshSingleDiskLocked(ctx context.Context, id string) (*mo
 	lsusb := c.loadLsusb(ctx)
 	d := c.baseDisk(*node)
 	c.fillSmart(ctx, &d, lsusb)
-	d.ManufactureDate = smart.InferManufactureDate(d.Model, d.Serial)
 	d.CollectedAt = time.Now().Unix()
 	// topology + btrfs for this disk only.
 	single := []model.Disk{d}
@@ -475,7 +631,9 @@ func (c *Collector) refreshSingleDiskLocked(ctx context.Context, id string) (*mo
 	d.Hibernated = false
 	d.OfflineAt = 0
 	computePowerCaps(&d)
-	c.hibernate.upsertFromDisk(&d)
+	if err := c.hibernate.upsertFromDisk(&d); err != nil {
+		return nil, fmt.Errorf("persist recovery data for %s: %w", d.ID, err)
+	}
 
 	// Patch into the cache (replace by stable identity, else append).
 	c.mu.Lock()
@@ -566,6 +724,12 @@ func mountPointsOf(d *model.Disk) []string {
 			out = append(out, hop.MountPoint)
 		}
 	}
+	for _, mp := range d.VolumePaths {
+		if mp != "" && !seen[mp] {
+			seen[mp] = true
+			out = append(out, mp)
+		}
+	}
 	return out
 }
 
@@ -573,6 +737,12 @@ func mountPointsOf(d *model.Disk) []string {
 // through the runner (sh -c ... tee) so mock mode can intercept it exactly
 // like every other command; sysfs writes need root, which the app has.
 func (c *Collector) writeSysfsState(ctx context.Context, id, state string) error {
+	if !powerIDRe.MatchString(id) {
+		return fmt.Errorf("非法磁盘标识 %q", id)
+	}
+	if state != "offline" && state != "running" {
+		return fmt.Errorf("非法设备状态 %q", state)
+	}
 	p := fmt.Sprintf("/sys/block/%s/device/state", id)
 	out, _, err := c.run.Run(ctx, "sh", "-c", fmt.Sprintf("echo %s | tee %s", state, p))
 	if err != nil {
@@ -582,6 +752,9 @@ func (c *Collector) writeSysfsState(ctx context.Context, id, state string) error
 }
 
 func (c *Collector) writeSysfsRescan(ctx context.Context, id string) error {
+	if !powerIDRe.MatchString(id) {
+		return fmt.Errorf("非法磁盘标识 %q", id)
+	}
 	p := fmt.Sprintf("/sys/block/%s/device/rescan", id)
 	_, _, err := c.run.Run(ctx, "sh", "-c", fmt.Sprintf("echo 1 | tee %s", p))
 	return err

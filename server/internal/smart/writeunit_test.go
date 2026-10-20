@@ -12,10 +12,13 @@ func TestPhisonWriteUnitIsGB(t *testing.T) {
 	attrs := []model.SmartAttr{
 		{ID: 241, Name: "Total_LBAs_Written", RawValue: 2048},
 	}
-	_, _, bw := deriveATALife(attrs, VendorPhison)
+	_, _, bw, src := deriveATALife(attrs, VendorPhison)
 	want := int64(2048) * 1024 * 1024 * 1024
 	if bw != want {
 		t.Errorf("phison bytesWritten=%d want %d", bw, want)
+	}
+	if src == "" {
+		t.Error("phison write source empty")
 	}
 }
 
@@ -24,10 +27,13 @@ func TestSMIWriteUnitIs32MiB(t *testing.T) {
 	attrs := []model.SmartAttr{
 		{ID: 241, Name: "Host_Writes_32MiB", RawValue: 1000},
 	}
-	_, _, bw := deriveATALife(attrs, VendorSMI)
+	_, _, bw, src := deriveATALife(attrs, VendorSMI)
 	want := int64(1000) * 32 * 1024 * 1024
 	if bw != want {
 		t.Errorf("smi bytesWritten=%d want %d", bw, want)
+	}
+	if src == "" {
+		t.Error("smi write source empty")
 	}
 }
 
@@ -36,9 +42,12 @@ func TestSamsungWriteUnitIsLBA(t *testing.T) {
 	attrs := []model.SmartAttr{
 		{ID: 241, Name: "Total_LBAs_Written", RawValue: 209715200},
 	}
-	_, _, bw := deriveATALife(attrs, VendorSamsung)
+	_, _, bw, src := deriveATALife(attrs, VendorSamsung)
 	want := int64(209715200) * 512
 	if bw != want {
 		t.Errorf("samsung bytesWritten=%d want %d", bw, want)
+	}
+	if src == "" {
+		t.Error("samsung write source empty")
 	}
 }

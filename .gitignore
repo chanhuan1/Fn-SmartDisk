@@ -20,5 +20,8 @@ tools/.gomodcache/
 *.log
 Thumbs.db
 
+# local-only handoff notes
+HANDOFF.md
+
 # local toolchains
 tools/bin/

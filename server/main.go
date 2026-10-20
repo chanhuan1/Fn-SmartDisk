@@ -152,8 +152,7 @@ func (l localSource) PowerLog(ctx context.Context, limit int) ([]model.PowerEven
 	return l.c.PowerEvents(limit), nil
 }
 func (l localSource) ClearPowerLog(ctx context.Context) error {
-	l.c.ClearPowerEvents()
-	return nil
+	return l.c.ClearPowerEvents()
 }
 func (l localSource) SetNote(ctx context.Context, id, note string) (*model.Disk, error) {
 	return l.c.SetNote(ctx, id, note)
@@ -255,8 +254,13 @@ func serve(ctx context.Context, cfg config.Config, src httpapi.DiskSource) {
 		if err != nil {
 			log.Fatalf("gateway listen: %v", err)
 		}
-		// Gateway (running as the system) must be able to connect.
-		_ = os.Chmod(cfg.GatewaySocket, 0o666)
+		mode := cfg.GatewaySocketMode
+		if mode == 0 {
+			mode = 0o600
+		}
+		if err := os.Chmod(cfg.GatewaySocket, mode); err != nil {
+			log.Fatalf("gateway socket permissions: %v", err)
+		}
 		log.Printf("web panel on gateway unix://%s prefix=%s (mode=%s mock=%v)",
 			cfg.GatewaySocket, cfg.GatewayPrefix, cfg.Mode, cfg.MockDir != "")
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
