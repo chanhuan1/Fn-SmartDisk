@@ -222,7 +222,7 @@ footer a:hover { color: #c9d8ff; }
       </div>
       <div class="card">
         <h3>💤 休眠盘安全采集</h3>
-        <p>首次采集先探测机械盘电源状态，休眠或状态不明的盘只显示基础信息。用户逐盘确认后才读 SMART，避免误唤醒其他休眠盘。</p>
+        <p>采集与刷新都先经 <code>smartctl -n standby</code> 无唤醒探测电源状态，休眠中的盘只显示基础信息，点刷新也能看到真实休眠状态且不会把盘弄醒。用户逐盘确认后才读 SMART。</p>
         <span class="tag ok">不误唤醒</span>
       </div>
       <div class="card">

@@ -1,7 +1,7 @@
 # 磁盘高级管理 交接文档
 
 > 飞牛 fnOS 磁盘高级管理 · 交接给下一位开发者 / 维护者
-> 版本 v1.0.0（首个发布版本）
+> 版本 v1.1.0（全盘刷新不唤醒休眠盘）
 
 > 仓库：<https://github.com/chanhuan1/Fn-SmartDisk> · 在线介绍页：<https://fn-smartdisk.pages.dev>
 
@@ -45,7 +45,7 @@
 
 | 项 | 状态 |
 |----|------|
-| 安装包 | `SmartDisk/SmartDisk.fpk`（约 3.2 MB，x86-64，版本 1.0.0），可手动安装 |
+| 安装包 | `SmartDisk/SmartDisk.fpk`（约 3.2 MB，x86-64，版本 1.1.0），可手动安装 |
 | 统一网关 | **已接入**（iframe 桌面窗口走 `/app/SmartDisk` → Unix Socket） |
 | 电源控制 | **已实现**（深度下线/唤醒 + 确认弹窗 + 阵列/系统盘保护 + SSE 实时步骤日志 + 操作日志面板），UI 截图验证通过 |
 | 单元/集成测试 | 全部通过（`smart`、`collector` 含 mock 端到端） |
@@ -55,6 +55,14 @@
 | 自带 smartctl/nvme 二进制 | **机制已就位，二进制未放** —— 见第 7 节 |
 
 **环境提醒（重要）：** 开发机 macOS 27 (Tahoe) 与 Go 1.22 有链接兼容 bug（引入 `net` 包时生成损坏二进制，缺 `LC_UUID`）。**必须用 Go 1.24+**。本机曾用 `/private/tmp/gosdk124`（1.24.9），属临时目录，重启会被清理，请自备 Go 1.24+ 并设 `GO` 环境变量。
+
+### 1.1.0 变更（刷新不唤醒休眠盘）
+
+此前点「刷新」会对所有盘直接跑完整 `smartctl -a`，对休眠中的 SATA 机械盘就是一次唤醒——刷新本想看状态，结果反而把盘弄醒。飞牛的普通休眠（ATA standby）在内核 sysfs 里仍是 `running`，只有深度下线才是 `offline`，sysfs 无法区分。
+
+现在刷新路径与冷启动一致：每块旋转盘先执行 `smartctl -n standby`（ATA CHECK POWER MODE，不转轴、无唤醒）探测电源状态；休眠中的盘只更新 `PowerState` 并标记 `smartDeferred`，等待逐盘确认读取；只有确认唤醒（active/idle）的盘才执行完整 SMART 采集。回归测试 `TestRefreshDefersStandbyDisks` 覆盖：mock 模式下休眠盘刷新后仍 deferred 且从未收到完整 SMART 命令。
+
+注意：这仍是**手动刷新**语义，后端没有后台定时探测；页面打开期间飞牛把盘休眠了，界面状态要等下一次刷新/重新进页面才会更新。
 
 ### 1.0.0 变更（首个发布版本）
 
