@@ -527,6 +527,68 @@ h2::before {
   color: var(--amber);
 }
 
+.release-stats-section {
+  padding: 0 0 4px;
+}
+.release-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+.release-stats-label {
+  color: var(--dim);
+  font-weight: 700;
+}
+.release-stats-total strong {
+  color: var(--teal);
+  font: 800 18px/1 "SFMono-Regular", ui-monospace, monospace;
+}
+.release-stats-breakdown {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.release-stat {
+  white-space: nowrap;
+}
+.release-stat b {
+  color: #cbdde3;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.release-stat strong {
+  color: var(--teal);
+  font-family: "SFMono-Regular", ui-monospace, monospace;
+}
+.release-stats-error {
+  color: #cdbb93;
+}
+.release-stats [aria-busy="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 8px rgba(68, 208, 199, .65);
+  animation: stats-pulse 1.2s ease-in-out infinite;
+}
+@keyframes stats-pulse {
+  0%, 100% { opacity: .35; }
+  50% { opacity: 1; }
+}
+
 footer {
   margin-top: 36px;
   padding: 28px 0 40px;
@@ -572,6 +634,9 @@ footer a:hover { color: var(--fg); }
   .cta { gap: 8px; }
   .cta { flex-direction: column; width: min(100%, 320px); }
   .btn { width: 100%; min-height: 42px; }
+  .release-stats { align-items: flex-start; flex-direction: column; text-align: left; }
+  .release-stats-breakdown { justify-content: flex-start; }
+  .release-stats-sep { display: none; }
 }
 
 @media (max-width: 420px) {
@@ -810,12 +875,162 @@ footer a:hover { color: var(--fg); }
   </div>
 </section>
 
+<section class="release-stats-section" aria-labelledby="release-download-title">
+  <div class="wrap">
+    <div class="release-stats" id="release-stats" title="数据来自 GitHub Releases API，缓存 15 分钟">
+      <span class="release-stats-label" id="release-download-title">GitHub Release 下载</span>
+      <span class="release-stats-total"><strong id="release-download-total">—</strong> 次</span>
+      <span class="release-stats-sep" aria-hidden="true">·</span>
+      <span class="release-stats-breakdown" id="release-download-breakdown" aria-live="polite" aria-busy="true">
+        正在读取 Release 数据…
+      </span>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     Fn-SmartDisk v1.2.0 · 飞牛 fnOS 磁盘高级管理 ·
     <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub 项目</a>
   </div>
 </footer>
+
+<script>
+(() => {
+  const apiUrl = "https://api.github.com/repos/chanhuan1/Fn-SmartDisk/releases?per_page=100";
+  const cacheKey = "fnsmartdisk-release-download-stats-v1";
+  const cacheTtl = 15 * 60 * 1000;
+  const numberFormat = new Intl.NumberFormat("zh-CN");
+  const totalEl = document.getElementById("release-download-total");
+  const breakdownEl = document.getElementById("release-download-breakdown");
+
+  function readCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+      if (!cached || typeof cached.timestamp !== "number" || !cached.stats) return null;
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCache(stats) {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), stats }));
+    } catch {
+      // Storage can be unavailable in private browsing contexts.
+    }
+  }
+
+  function architectureOf(name) {
+    const value = String(name || "").toLowerCase();
+    if (/(arm64|aarch64)/.test(value)) return "arm64";
+    if (/(x86[_-]?64|amd64|x64)/.test(value)) return "x86_64";
+    // Fn-SmartDisk currently publishes a single x86_64 fpk without an arch suffix.
+    return "x86_64";
+  }
+
+  function summarize(releases) {
+    let total = 0;
+    const latestByArch = new Map();
+    const ordered = releases
+      .filter((release) => release && !release.draft)
+      .sort((a, b) => {
+        const at = Date.parse(a.published_at || a.created_at || 0);
+        const bt = Date.parse(b.published_at || b.created_at || 0);
+        return bt - at;
+      });
+
+    for (const release of ordered) {
+      const perRelease = new Map();
+      for (const asset of release.assets || []) {
+        if (asset.state && asset.state !== "uploaded") continue;
+        const downloads = Math.max(0, Number(asset.download_count) || 0);
+        const arch = architectureOf(asset.name);
+        total += downloads;
+        perRelease.set(arch, (perRelease.get(arch) || 0) + downloads);
+      }
+      for (const [arch, downloads] of perRelease) {
+        if (!latestByArch.has(arch)) {
+          latestByArch.set(arch, {
+            arch,
+            tag: release.tag_name || release.name || "latest",
+            downloads,
+          });
+        }
+      }
+    }
+
+    const order = { x86_64: 0, arm64: 1 };
+    const platforms = Array.from(latestByArch.values())
+      .sort((a, b) => (order[a.arch] ?? 99) - (order[b.arch] ?? 99));
+    return { total, platforms };
+  }
+
+  function render(stats, cached = false) {
+    totalEl.textContent = numberFormat.format(stats.total || 0);
+    breakdownEl.replaceChildren();
+    breakdownEl.removeAttribute("aria-busy");
+    breakdownEl.classList.remove("release-stats-error");
+
+    if (!stats.platforms || stats.platforms.length === 0) {
+      breakdownEl.textContent = "暂无公开安装包";
+      return;
+    }
+
+    stats.platforms.forEach((platform, index) => {
+      if (index > 0) breakdownEl.append(document.createTextNode(" · "));
+      const item = document.createElement("span");
+      item.className = "release-stat";
+      const label = document.createElement("b");
+      label.textContent = `${platform.tag} ${platform.arch}`;
+      const count = document.createElement("strong");
+      count.textContent = numberFormat.format(platform.downloads || 0);
+      item.append(label, document.createTextNode(" "), count, document.createTextNode(" 次"));
+      breakdownEl.append(item);
+    });
+
+    if (cached) breakdownEl.title = "当前显示最近一次成功获取的缓存数据";
+  }
+
+  function renderError() {
+    totalEl.textContent = "—";
+    breakdownEl.replaceChildren();
+    breakdownEl.removeAttribute("aria-busy");
+    breakdownEl.classList.add("release-stats-error");
+    breakdownEl.textContent = "下载统计暂不可用";
+  }
+
+  async function loadStats() {
+    const cached = readCache();
+    if (cached && Date.now() - cached.timestamp < cacheTtl) {
+      render(cached.stats, true);
+      return;
+    }
+
+    try {
+      const response = await fetch(apiUrl, {
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+      const releases = await response.json();
+      if (!Array.isArray(releases)) throw new Error("Unexpected GitHub API response");
+      const stats = summarize(releases);
+      writeCache(stats);
+      render(stats);
+    } catch {
+      if (cached?.stats) {
+        render(cached.stats, true);
+      } else {
+        renderError();
+      }
+    }
+  }
+
+  loadStats();
+})();
+</script>
 
 </body>
 </html>
