@@ -61,7 +61,7 @@ body::before {
 }
 
 .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-.btn svg, .feature-icon, .warning-box svg {
+.btn svg, .hero-feature svg, .feature-icon, .warning-box svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -231,6 +231,53 @@ code {
 .btn-primary:hover { background: #62ddd5; border-color: #62ddd5; }
 .btn-ghost:hover { border-color: rgba(142, 165, 182, .38); background: var(--panel-2); }
 
+.hero-feature {
+  width: min(100%, 720px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 1px solid rgba(68, 208, 199, .3);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius);
+  color: var(--fg);
+  background: linear-gradient(90deg, rgba(68, 208, 199, .1), rgba(17, 24, 32, .8));
+  text-align: left;
+}
+.hero-feature:hover {
+  border-color: rgba(68, 208, 199, .5);
+  background: linear-gradient(90deg, rgba(68, 208, 199, .14), rgba(17, 24, 32, .9));
+  text-decoration: none;
+}
+.hero-feature-kicker {
+  color: var(--teal);
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.hero-feature-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hero-feature-copy strong {
+  color: #e2f1f4;
+  font-size: 14.5px;
+}
+.hero-feature-copy span {
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.hero-feature svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--teal);
+}
+
 section { padding: 42px 0; }
 .section-head {
   display: flex;
@@ -316,6 +363,113 @@ h2::before {
 .tag.warn { color: var(--amber); }
 .tag.err { color: var(--red); }
 
+.sleep-section {
+  padding: 46px 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(17, 24, 32, .78), rgba(10, 15, 21, .52));
+}
+.sleep-layout {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(360px, 1.1fr);
+  align-items: center;
+  gap: 42px;
+}
+.sleep-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 800;
+}
+.sleep-kicker::before {
+  content: "";
+  width: 20px;
+  height: 2px;
+  background: var(--teal);
+}
+.sleep-copy h2 {
+  margin-bottom: 12px;
+  font-size: 32px;
+  line-height: 1.22;
+}
+.sleep-copy h2::before { display: none; }
+.sleep-copy > p {
+  margin: 0;
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.sleep-note {
+  margin-top: 16px;
+  padding-left: 13px;
+  border-left: 2px solid rgba(240, 183, 91, .65);
+  color: #cdbb93;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.sleep-flow {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sleep-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 13px 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: rgba(8, 11, 16, .52);
+}
+.sleep-step-index {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(68, 208, 199, .3);
+  border-radius: var(--radius-sm);
+  color: var(--teal);
+  background: var(--teal-soft);
+  font: 700 12px/1 "SFMono-Regular", ui-monospace, monospace;
+}
+.sleep-step b {
+  display: block;
+  margin-bottom: 2px;
+  color: #dce9ee;
+  font-size: 14px;
+}
+.sleep-step span {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.sleep-protections {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 26px;
+}
+.sleep-protection {
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+.sleep-protection b {
+  display: block;
+  margin-bottom: 2px;
+  color: #dce9ee;
+  font-size: 13px;
+}
+
 .install-wrap { max-width: 780px; }
 .step-list {
   display: grid;
@@ -394,6 +548,9 @@ footer a:hover { color: var(--fg); }
   .grid { grid-template-columns: 1fr; }
   .card { min-height: 0; }
   .section-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .sleep-layout { grid-template-columns: 1fr; gap: 26px; }
+  .sleep-copy h2 { font-size: 27px; }
+  .sleep-protections { grid-template-columns: 1fr; gap: 4px; }
 }
 
 @media (max-width: 640px) {
@@ -410,6 +567,8 @@ footer a:hover { color: var(--fg); }
   }
   .badges::-webkit-scrollbar { display: none; }
   .badge { flex: none; }
+  .hero-feature { grid-template-columns: 1fr auto; }
+  .hero-feature-kicker { grid-column: 1 / -1; }
   .cta { gap: 8px; }
   .cta { flex-direction: column; width: min(100%, 320px); }
   .btn { width: 100%; min-height: 42px; }
@@ -481,6 +640,7 @@ footer a:hover { color: var(--fg); }
       <span class="version">v1.2.0</span>
     </a>
     <div class="nav-links">
+      <a href="#manual-sleep">手动深度休眠</a>
       <a href="#features">功能</a>
       <a href="#install">安装</a>
       <a href="https://github.com/chanhuan1/Fn-SmartDisk" target="_blank" rel="noopener">GitHub 项目</a>
@@ -494,8 +654,16 @@ footer a:hover { color: var(--fg); }
     <div class="badge-top"><span class="status-dot"></span>飞牛 fnOS 原生应用</div>
     <h1>Fn-SmartDisk</h1>
     <p class="sub">
-      把散落在 <code>smartctl</code>、<code>lsblk</code>、<code>btrfs</code> 里的原始数据整理成清晰、可验证的硬盘健康档案，并为冷备盘提供受保护的深度下线与唤醒能力。
+      把散落在 <code>smartctl</code>、<code>lsblk</code>、<code>btrfs</code> 里的原始数据整理成清晰、可验证的硬盘健康档案。最大特点是可把冷备机械盘手动切入内核级深度休眠，并在需要时由你亲手唤醒。
     </p>
+    <a class="hero-feature" href="#manual-sleep">
+      <span class="hero-feature-kicker">最大特点</span>
+      <span class="hero-feature-copy">
+        <strong>手动深度休眠</strong>
+        <span>同步 → 安全卸载 → 停转 → 内核 offline，正常运行时不会被飞牛后台访问唤醒</span>
+      </span>
+      <svg aria-hidden="true"><use href="#i-arrow"></use></svg>
+    </a>
     <div class="badges">
       <span class="badge"><b>v1.2.0</b> 当前版本</span>
       <span class="badge">Go <b>+ Vue 3</b></span>
@@ -512,13 +680,53 @@ footer a:hover { color: var(--fg); }
         <svg class="github-icon" aria-hidden="true"><use href="#i-github"></use></svg>
         GitHub 项目
       </a>
-      <a class="btn btn-ghost" href="#install">
-        查看安装指南
+      <a class="btn btn-ghost" href="#manual-sleep">
+        了解手动深度休眠
         <svg aria-hidden="true"><use href="#i-arrow"></use></svg>
       </a>
     </div>
   </div>
 </header>
+
+<section id="manual-sleep" class="sleep-section">
+  <div class="wrap">
+    <div class="sleep-layout">
+      <div class="sleep-copy">
+        <span class="sleep-kicker">项目最大特点</span>
+        <h2>让冷备盘真正停下来，<br>而不是等它再次被叫醒</h2>
+        <p>
+          普通待机仍可能被系统扫描、索引或文件访问重新唤醒。手动深度休眠会先保护数据，再把设备从内核层面隔离，让飞牛后台在正常运行时无法再次访问这块盘。
+        </p>
+        <div class="sleep-note">
+          这是明确的手动操作：只在用户确认后执行，正常运行时也只能从本应用手动唤醒。fnOS 重启会让磁盘重新上线。
+        </div>
+      </div>
+      <ol class="sleep-flow" aria-label="手动深度休眠执行步骤">
+        <li class="sleep-step">
+          <span class="sleep-step-index">01</span>
+          <div><b>同步数据</b><span>先执行 sync，把尚未落盘的数据写入磁盘。</span></div>
+        </li>
+        <li class="sleep-step">
+          <span class="sleep-step-index">02</span>
+          <div><b>安全卸载</b><span>懒卸载该盘关联的卷，避免文件系统仍处于挂载状态。</span></div>
+        </li>
+        <li class="sleep-step">
+          <span class="sleep-step-index">03</span>
+          <div><b>停转盘体</b><span>机械结构进入停转状态，降低冷备期间的运行与磨损。</span></div>
+        </li>
+        <li class="sleep-step">
+          <span class="sleep-step-index">04</span>
+          <div><b>内核隔离</b><span>写入 device offline，正常运行时只能从本应用手动唤醒。</span></div>
+        </li>
+      </ol>
+    </div>
+    <div class="sleep-protections">
+      <div class="sleep-protection"><b>仅 SATA 机械盘</b>SSD、NVMe 和 USB 桥接盘不会提供深度休眠入口。</div>
+      <div class="sleep-protection"><b>风险必须确认</b>系统盘禁止操作；RAID 成员和正在读写的磁盘需要独立确认。</div>
+      <div class="sleep-protection"><b>状态可恢复</b>恢复记录原子持久化；异常中断会在下次采集时校正并尝试恢复挂载。</div>
+    </div>
+  </div>
+</section>
 
 <section id="features">
   <div class="wrap">
@@ -545,8 +753,8 @@ footer a:hover { color: var(--fg); }
         <span class="tag">早期预警</span>
       </article>
       <article class="card">
-        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-power"></use></svg>深度下线与唤醒</h3>
-        <p>先同步并懒卸载，再停转和内核隔离；唤醒后重扫总线，按 UUID 补挂载，并通过 SSE 实时展示每一步。</p>
+        <h3><svg class="feature-icon" aria-hidden="true"><use href="#i-power"></use></svg>手动唤醒与安全恢复</h3>
+        <p>唤醒后重扫总线，按 UUID 补挂载，逐项检查原有卷是否恢复，并通过 SSE 实时展示每一步。</p>
         <span class="tag err">仅 SATA HDD</span>
       </article>
       <article class="card">
