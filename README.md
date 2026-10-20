@@ -110,45 +110,6 @@ Fn-SmartDisk 是面向飞牛 fnOS 的原生 `.fpk` 应用，补齐官方磁盘�
 > [!WARNING]
 > SMART 数据采集是只读操作。电源控制会执行停转、卸载和内核上下线动作，仅适用于已经确认可以离线的冷备盘。
 
-## 本地开发
-
-环境要求：
-
-- Go 1.24+
-- Node.js 18+
-- `fnpack`
-
-前端：
-
-```bash
-cd web
-npm ci
-npm run typecheck
-npm run build
-```
-
-后端测试：
-
-```bash
-cd server
-go test -race ./...
-go vet ./...
-```
-
-本地 mock 服务：
-
-```bash
-SMARTDISK_MOCK_DIR=./mock go run .
-```
-
-构建 FPK：
-
-```bash
-GO=/path/to/go scripts/build.sh
-```
-
-产物位于 `SmartDisk/SmartDisk.fpk`。
-
 ## 项目结构
 
 ```text
