@@ -146,15 +146,16 @@ func (c *Collector) List(ctx context.Context) ([]model.Disk, error) {
 	if disks, ok := c.snapshot(); ok {
 		return disks, nil
 	}
-	return c.collectAndPublish(ctx, false)
+	return c.collectAndPublish(ctx)
 }
 
-// Refresh forces a fresh collection, bypassing and replacing the cache. Used
-// only when the user explicitly clicks "refresh".
+// Refresh forces a fresh collection, bypassing and replacing the cache.
+// Sleeping rotational disks are probed (never read) and stay deferred, so a
+// refresh reports the true power state without waking them.
 func (c *Collector) Refresh(ctx context.Context) ([]model.Disk, error) {
 	c.scanMu.Lock()
 	defer c.scanMu.Unlock()
-	return c.collectAndPublish(ctx, true)
+	return c.collectAndPublish(ctx)
 }
 
 func cloneDisks(disks []model.Disk) []model.Disk {
@@ -303,12 +304,12 @@ func copyPowerState(dst, src *model.Disk) {
 	dst.NoOfflineReason = src.NoOfflineReason
 }
 
-func (c *Collector) collectAndPublish(ctx context.Context, readSleeping bool) ([]model.Disk, error) {
+func (c *Collector) collectAndPublish(ctx context.Context) ([]model.Disk, error) {
 	c.mu.RLock()
 	startPowerRevision := c.powerRevision
 	c.mu.RUnlock()
 
-	disks, err := c.collect(ctx, readSleeping)
+	disks, err := c.collect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -344,10 +345,10 @@ func (c *Collector) collectAndPublish(ctx context.Context, readSleeping bool) ([
 	return cloneDisks(c.cached), nil
 }
 
-// collect builds a fresh inventory. readSleeping is true only for an explicit
-// full refresh; otherwise rotational disks with an unconfirmed or unknown
-// power state are returned with SMART deferred.
-func (c *Collector) collect(ctx context.Context, readSleeping bool) ([]model.Disk, error) {
+// collect builds a fresh inventory. Rotational disks are always power-probed
+// first (smartctl -n standby does not spin up a sleeping drive); only awake
+// disks get a full SMART read, keeping a refresh wake-free.
+func (c *Collector) collect(ctx context.Context) ([]model.Disk, error) {
 	inv, err := c.enumDisks(ctx)
 	if err != nil {
 		return nil, err
@@ -368,7 +369,7 @@ func (c *Collector) collect(ctx context.Context, readSleeping bool) ([]model.Dis
 					return
 				}
 				d := c.baseDisk(inv.disks[i])
-				if !readSleeping && d.Rotational {
+				if d.Rotational {
 					if d.Interface == model.IfUSB {
 						d.Bridge = c.resolveBridge(ctx, &d, lsusb)
 					}

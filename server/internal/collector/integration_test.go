@@ -272,6 +272,38 @@ func TestColdListChecksPowerBeforeSMARTAndDefersStandby(t *testing.T) {
 	}
 }
 
+// A full refresh must also defer sleeping rotational disks instead of waking
+// them: the user's "refresh" button reports the true standby state read via
+// the wake-free smartctl -n standby probe.
+func TestRefreshDefersStandbyDisks(t *testing.T) {
+	dir := findMockDir(t)
+	c := New(config.Config{MockDir: dir, LsblkPath: "lsblk", LsusbPath: "lsusb", SmartctlPath: "smartctl", DataDir: t.TempDir()})
+	recorder := &recordingRunner{inner: c.run}
+	c.run = recorder
+
+	disks, err := c.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	var sdc *model.Disk
+	for i := range disks {
+		if disks[i].ID == "sdc" {
+			sdc = &disks[i]
+		}
+	}
+	if sdc == nil || !sdc.SmartDeferred || sdc.SmartAvail || sdc.PowerState != "standby" {
+		t.Fatalf("refresh must keep standby sdc deferred: %+v", sdc)
+	}
+	for _, call := range recorder.callsCopy() {
+		if strings.Contains(call, "smartctl -a -j") && strings.Contains(call, "/dev/sdc") {
+			t.Fatalf("refresh issued full SMART read to standby sdc: %q", call)
+		}
+	}
+	if !strings.Contains(strings.Join(recorder.callsCopy(), "\n"), "smartctl -n standby") {
+		t.Fatal("refresh did not run the wake-free standby probe")
+	}
+}
+
 func TestColdListDefersRotationalDiskWhenPowerStateIsUnknown(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lsblk_-J_-O_-b.txt"), []byte(`{"blockdevices":[{"name":"sda","path":"/dev/sda","type":"disk","tran":"sata","size":"2000","model":"WDC","serial":"Z1","rota":true}]}`), 0o600); err != nil {
