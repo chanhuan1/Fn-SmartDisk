@@ -3,6 +3,8 @@
 > 飞牛 fnOS 磁盘高级管理 · 交接给下一位开发者 / 维护者
 > 版本 v3.1.0（电源确认安全修复、死代码清理与本地重新打包）
 
+> 仓库：<https://github.com/chanhuan1/Fn-SmartDisk> · 在线介绍页：<https://fn-smartdisk.pages.dev>
+
 ---
 
 ## 1. 项目是什么
@@ -145,7 +147,11 @@
 ├─ tools/
 │  ├─ icon.svg                 图标源文件
 │  ├─ shot.mjs / shot_scroll.mjs  无头 Chrome 截图脚本（CDP，验证 UI 用）
+│  ├─ set-secrets.mjs          一次性写入 Cloudflare Pages 部署所需 GitHub Secrets
 │  └─ bin/                     （空）放 linux/x86_64 静态 smartctl、nvme
+├─ site/                       Cloudflare Pages 在线介绍页（纯静态单页）
+├─ .github/workflows/deploy.yml  push master 自动部署 Pages
+├─ wrangler.jsonc              Cloudflare Pages 项目配置（fn-smartdisk）
 ├─ README.md                   项目说明
 └─ HANDOFF.md                  本文档
 ```
@@ -481,3 +487,18 @@ iframe 网关已修通，但**解析器面对的是千差万别的真实盘**，
 ---
 
 **关键路径速记**：后端入口 `server/main.go` → 采集 `server/internal/collector/collector.go` → 电源控制 `server/internal/collector/power.go`（持久化 `hibernate.go`、日志 `powerlog.go`）→ 解析评级 `server/internal/smart/`（解析 `smartctl.go`、中文 `attrnames.go`/`translate.go`、评级 `health.go`）→ API `server/internal/httpapi/server.go` → 前端 `web/src/views/`。
+
+---
+
+## 12. GitHub 仓库与在线介绍页部署
+
+**仓库结构**：GitHub 仓库根目录就是本工程根目录（`server/`、`web/`、`SmartDisk/`、`site/` 等），`SmartDisk.fpk` 与 `node_modules`、`dist` 等构建产物不入库。本地目录如需重新接入仓库：`git init` 后把 `origin` 指向 <https://github.com/chanhuan1/Fn-SmartDisk.git>，`git fetch origin master && git checkout -f -B master origin/master` 即可（会以远端为准覆盖工作区，注意先备份本地未提交改动）。
+
+**在线介绍页**：`site/index.html` 是纯静态介绍页，部署在 Cloudflare Pages，域名 <https://fn-smartdisk.pages.dev>。它只是项目宣传/安装指引，与 fnOS 应用本体无运行时依赖；改介绍页只需改 `site/`，push 到 master 后自动上线。
+
+**自动部署**：`.github/workflows/deploy.yml` 在每次 push 到 `master`（或手动 workflow_dispatch）时，用 wrangler 执行 `wrangler pages deploy site --project-name fn-smartdisk --branch master`。所需 Secrets 有两个，`tools/set-secrets.mjs` 是一次性写入工具：
+
+- `CF_API_TOKEN`：Cloudflare API Token（需 Pages 部署权限）
+- `CF_ACCOUNT_ID`：Cloudflare 账户 ID
+
+**部署排错**：Actions 失败先看 Secret 是否齐全、Token 是否过期；页面不更新时确认 workflow 是否跑完、以及浏览器缓存（介绍页为静态资源，可强刷）。`wrangler.jsonc` 仅声明 Pages 项目名与静态资源目录，本地预览可 `npx wrangler pages dev site`。
