@@ -6,7 +6,6 @@ web/tsconfig.tsbuildinfo
 server/web/dist/
 SmartDisk/app/www/
 SmartDisk/app/server/smartdisk
-*.fpk
 
 # os junk
 .DS_Store
