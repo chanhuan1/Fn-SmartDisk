@@ -7,10 +7,8 @@
 APP_BIN="${TRIM_APPDEST}/server/smartdisk"
 LOG_FILE="${TRIM_PKGVAR}/smartdisk.log"
 PID_FILE="${TRIM_PKGVAR}/smartdisk.pid"
-PORT="${TRIM_SERVICE_PORT:-8315}"
 
 export SMARTDISK_MODE="all"
-export SMARTDISK_PORT="${PORT}"
 export SMARTDISK_WEB_ROOT="${TRIM_APPDEST}/www"
 # Serve through the fnOS unified gateway: the desktop iframe loads
 # /app/smartdisk, which fnOS forwards to ${TRIM_APPDEST}/app.sock.
@@ -60,7 +58,7 @@ start_process() {
         log_msg "ERROR: binary not found at ${APP_BIN}"
         return 1
     fi
-    log_msg "starting smartdisk (port ${PORT})"
+    log_msg "starting smartdisk (gateway ${SMARTDISK_GATEWAY_PREFIX})"
     "${APP_BIN}" >> "${LOG_FILE}" 2>&1 &
     printf "%s" "$!" > "${PID_FILE}"
     sleep 1
@@ -92,6 +90,7 @@ stop_process() {
         fi
         rm -f "${PID_FILE}"
     fi
+    rm -f "${SMARTDISK_GATEWAY_SOCKET}"
     return 0
 }
 

@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"smartdisk/internal/config"
 )
 
 func TestRefreshRejectsGET(t *testing.T) {
@@ -59,5 +61,48 @@ func TestDiskUnknownNestedResourceRejected(t *testing.T) {
 	s.handleDiskByID(rec, req)
 	if rec.Code != 404 {
 		t.Fatalf("status=%d want 404", rec.Code)
+	}
+}
+
+func TestGatewayAPIRequiresAdminHeaders(t *testing.T) {
+	cfg := config.Config{
+		GatewaySocket: "app.sock",
+		GatewayPrefix: "/app/SmartDisk",
+	}
+	h := New(cfg, nil, nil, false).Handler()
+
+	req := httptest.NewRequest("GET", "/app/SmartDisk/api/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("missing headers status=%d want 403", rec.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/app/SmartDisk/api/health", nil)
+	req.Header.Set("X-Trim-Userid", "1000")
+	req.Header.Set("X-Trim-Isadmin", "false")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin status=%d want 403", rec.Code)
+	}
+
+	req = httptest.NewRequest("GET", "/app/SmartDisk/api/health", nil)
+	req.Header.Set("X-Trim-Userid", "1000")
+	req.Header.Set("X-Trim-Isadmin", "true")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin status=%d want 200", rec.Code)
+	}
+}
+
+func TestDevelopmentAPIAllowsRequestWithoutGatewayHeaders(t *testing.T) {
+	h := New(config.Config{}, nil, nil, true).Handler()
+	req := httptest.NewRequest("GET", "/api/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("development health status=%d want 200", rec.Code)
 	}
 }

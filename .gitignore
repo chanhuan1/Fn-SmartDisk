@@ -6,6 +6,7 @@ web/tsconfig.tsbuildinfo
 server/web/dist/
 SmartDisk/app/www/
 SmartDisk/app/server/smartdisk
+dist/
 
 # os junk
 .DS_Store
@@ -19,9 +20,6 @@ tools/.gomodcache/
 # editor / logs
 *.log
 Thumbs.db
-
-# local-only handoff notes
-HANDOFF.md
 
 # local toolchains
 tools/bin/

@@ -270,11 +270,11 @@ func serve(ctx context.Context, cfg config.Config, src httpapi.DiskSource) {
 	}
 
 	addr := cfg.ListenAddr()
-	log.Printf("web panel on http://%s (mode=%s mock=%v)", addr, cfg.Mode, cfg.MockDir != "")
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("http listen: %v", err)
 	}
+	log.Printf("web panel on http://%s (mode=%s mock=%v)", ln.Addr(), cfg.Mode, cfg.MockDir != "")
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("http: %v", err)
 	}

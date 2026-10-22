@@ -1,5 +1,9 @@
 #!/bin/bash
+# Repeat cleanup after package files are removed. This also handles stale PID
+# files left by older releases whose uninstall hooks were empty.
 
-### This script is called after the user uninstalls the application.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+. "${SCRIPT_DIR}/stop_existing"
 
+stop_existing_smartdisk
 exit 0

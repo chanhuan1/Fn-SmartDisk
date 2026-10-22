@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-44d0c7">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-44d0c7">
   <img alt="Platform" src="https://img.shields.io/badge/platform-fnOS%20x86__64-147d8f">
   <img alt="Stack" src="https://img.shields.io/badge/stack-Go%20%2B%20Vue%203-80d98b">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-6f8090">
@@ -96,6 +96,7 @@ Fn-SmartDisk 是面向飞牛 fnOS 的原生 `.fpk` 应用，补齐官方磁盘�
 - 正在读写的磁盘必须单独确认数据风险。
 - 恢复数据或下线状态无法持久化时，拒绝继续执行危险操作。
 - 唤醒后逐项检查原有挂载卷，不把部分恢复误报为成功。
+- 仅管理员可访问应用与调用电源接口，普通用户无法绕过桌面入口直接操作磁盘。
 
 ## 安装
 
@@ -105,7 +106,9 @@ Fn-SmartDisk 是面向飞牛 fnOS 的原生 `.fpk` 应用，补齐官方磁盘�
 2. 进入 fnOS 应用中心，选择「手动安装」。
 3. 上传 FPK，安装完成后从桌面打开「磁盘高级管理」。
 
-默认通过 fnOS 统一网关 `/app/SmartDisk` 访问，也可使用独立端口 `8315` 直连。
+应用通过 fnOS 统一网关 `/app/SmartDisk` 访问，不单独开放服务端口。
+
+手机 App 首次打开会先经过登录态同步页，登录状态就绪后自动进入应用，无需手动刷新。
 
 > [!WARNING]
 > SMART 数据采集是只读操作。电源控制会执行停转、卸载和内核上下线动作，仅适用于已经确认可以离线的冷备盘。

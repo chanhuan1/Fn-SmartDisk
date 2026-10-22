@@ -1,5 +1,8 @@
 #!/bin/bash
+# Called before upgrade. Stop the old binary while its replacement is staged.
 
-### This script is called before the user upgrades the application.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+. "${SCRIPT_DIR}/stop_existing"
 
+stop_existing_smartdisk
 exit 0

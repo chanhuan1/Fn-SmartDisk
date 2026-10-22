@@ -149,7 +149,34 @@ func (s *Server) routes(staticFS http.FileSystem) {
 
 // Handler returns the root handler with security headers applied.
 func (s *Server) Handler() http.Handler {
-	return s.secureHeaders(s.mux)
+	h := http.Handler(s.secureHeaders(s.mux))
+	if s.cfg.GatewayEnabled() {
+		h = s.requireGatewayAdmin(h)
+	}
+	return h
+}
+
+// requireGatewayAdmin enforces the application's admin-only permission model.
+// The fnOS gateway has already validated the NAS session and injects these
+// trusted identity headers before forwarding to app.sock.
+func (s *Server) requireGatewayAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if s.prefix != "" {
+			p = strings.TrimPrefix(p, s.prefix)
+		}
+		if !strings.HasPrefix(p, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		uid := strings.TrimSpace(r.Header.Get("X-Trim-Userid"))
+		isAdmin := strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Trim-Isadmin")), "true")
+		if uid == "" || !isAdmin {
+			writeErr(w, http.StatusForbidden, "需要 fnOS 管理员权限")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) secureHeaders(next http.Handler) http.Handler {

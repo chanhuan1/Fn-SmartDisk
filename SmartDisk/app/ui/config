@@ -4,14 +4,37 @@
             "title": "磁盘高级管理",
             "icon": "images/icon_{0}.png",
             "type": "iframe",
+            "protocol": "http",
+            "url": "/cgi/ThirdParty/SmartDisk/index.cgi/",
+            "allUsers": false,
+            "noDisplay": false,
+            "control": {
+                "accessPerm": "readonly"
+            }
+        },
+        "SmartDisk.Gateway": {
+            "title": "磁盘高级管理 Gateway",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
             "protocol": "",
             "gatewayPrefix": "/app/SmartDisk",
             "gatewaySocket": "app.sock",
             "url": "/app/SmartDisk",
             "allUsers": false,
+            "noDisplay": true,
             "control": {
-                "accessPerm": "readonly"
+                "accessPerm": "hidden"
             }
+        }
+    },
+    "desktop": {
+        "SmartDisk.Application": {
+            "title": "磁盘高级管理",
+            "icon": "images/icon_64.png",
+            "type": "iframe",
+            "protocol": "http",
+            "url": "/cgi/ThirdParty/SmartDisk/index.cgi/",
+            "allUsers": false
         }
     }
 }

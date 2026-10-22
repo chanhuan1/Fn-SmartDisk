@@ -31,9 +31,10 @@ type Config struct {
 	// SmartDisk/manifest). Exposed via /api/health for the UI.
 	Version string
 
-	// HTTP listen address for the web panel.
+	// HTTP listen address for development or split-process TCP mode.
 	HTTPAddr string
-	// Port used to derive HTTPAddr when HTTPAddr is empty.
+	// Port is an explicit TCP port for development or split-process mode.
+	// Zero selects an ephemeral loopback port.
 	Port int
 
 	// SocketPath is the Unix domain socket the collector listens on and the
@@ -131,7 +132,7 @@ func Load() Config {
 		mode = ModeAll
 	}
 
-	port := getenvInt("SMARTDISK_PORT", 8315)
+	port := getenvInt("SMARTDISK_PORT", 0)
 	httpAddr := getenv("SMARTDISK_HTTP_ADDR", "")
 
 	sock := getenv("SMARTDISK_SOCKET", "")
@@ -150,8 +151,9 @@ func Load() Config {
 		gwSocket = filepath.Join(dir, "app.sock")
 	}
 	gwPrefix := getenv("SMARTDISK_GATEWAY_PREFIX", "/app/smartdisk")
-	// Gateway serving is only active when explicitly requested, so plain TCP
-	// mode (dev / 独立端口访问) keeps working unchanged.
+	// Gateway serving is only active when explicitly requested. Local
+	// development can still opt into TCP with SMARTDISK_PORT or
+	// SMARTDISK_HTTP_ADDR.
 	if strings.ToLower(getenv("SMARTDISK_GATEWAY", "")) != "1" &&
 		strings.ToLower(getenv("SMARTDISK_GATEWAY", "")) != "true" {
 		gwSocket = ""
@@ -200,10 +202,14 @@ func Load() Config {
 // gateway Unix socket instead of plain TCP.
 func (c Config) GatewayEnabled() bool { return c.GatewaySocket != "" }
 
-// ListenAddr resolves the address the web server binds to.
+// ListenAddr resolves the explicit development TCP address. Packaged
+// deployments use the fnOS unified gateway instead.
 func (c Config) ListenAddr() string {
 	if c.HTTPAddr != "" {
 		return c.HTTPAddr
+	}
+	if c.Port <= 0 {
+		return "127.0.0.1:0"
 	}
 	return "0.0.0.0:" + strconv.Itoa(c.Port)
 }

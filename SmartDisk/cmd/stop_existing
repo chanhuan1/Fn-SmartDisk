@@ -1,0 +1,79 @@
+#!/bin/bash
+# Stop a running SmartDisk process before install, upgrade, or uninstall.
+# Only processes whose argv[0] is the installed server binary are terminated.
+
+stop_existing_smartdisk() {
+    [ -n "${TRIM_APPDEST:-}" ] || return 0
+
+    local app_bin="${TRIM_APPDEST}/server/smartdisk"
+    local pid_file=""
+    local socket="${TRIM_APPDEST}/app.sock"
+    local log_file=""
+    local pids=""
+    local seen=" "
+
+    if [ -n "${TRIM_PKGVAR:-}" ]; then
+        pid_file="${TRIM_PKGVAR}/smartdisk.pid"
+        log_file="${TRIM_PKGVAR}/smartdisk.log"
+    fi
+
+    owned_process() {
+        local pid="$1"
+        local argv0=""
+        [ -r "/proc/${pid}/cmdline" ] || return 1
+        argv0=$(tr '\0' '\n' < "/proc/${pid}/cmdline" | head -n 1)
+        [ "${argv0}" = "${app_bin}" ]
+    }
+
+    add_pid() {
+        local pid="$1"
+        [ -n "${pid}" ] || return 0
+        case "${seen}" in
+            *" ${pid} "*) return 0 ;;
+        esac
+        owned_process "${pid}" || return 0
+        seen="${seen}${pid} "
+        pids="${pids} ${pid}"
+    }
+
+    if [ -n "${pid_file}" ] && [ -r "${pid_file}" ]; then
+        add_pid "$(head -n 1 "${pid_file}" | tr -d '[:space:]')"
+    fi
+    if command -v pgrep >/dev/null 2>&1; then
+        for pid in $(pgrep -f -- "${app_bin}" 2>/dev/null || true); do
+            add_pid "${pid}"
+        done
+    fi
+
+    for pid in ${pids}; do
+        kill -TERM "${pid}" 2>/dev/null || true
+    done
+
+    local count=0
+    while [ ${count} -lt 10 ]; do
+        local alive=0
+        for pid in ${pids}; do
+            if kill -0 "${pid}" 2>/dev/null; then
+                alive=1
+            fi
+        done
+        [ ${alive} -eq 0 ] && break
+        sleep 1
+        count=$((count + 1))
+    done
+
+    for pid in ${pids}; do
+        if kill -0 "${pid}" 2>/dev/null; then
+            kill -KILL "${pid}" 2>/dev/null || true
+        fi
+    done
+
+    if [ -n "${pid_file}" ]; then
+        rm -f "${pid_file}"
+    fi
+    rm -f "${socket}"
+    if [ -n "${pids}" ] && [ -n "${log_file}" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - stopped existing SmartDisk process:${pids}" >> "${log_file}"
+    fi
+    return 0
+}
